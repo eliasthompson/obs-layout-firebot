@@ -1,10 +1,11 @@
+import { createJiti } from 'jiti';
 // Where the tools find the config, Firebot, and OBS. Each setting comes from a command-line option, else an
 // environment variable (set in the shell or in a .env file in the working directory, see .env.example), else the
 // config's `firebot` and `obs` entries, else the default for the platform.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, extname, join, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
 
@@ -44,7 +45,11 @@ export const packageRoot = () => {
   return dir;
 };
 
-/** Load a config file: TypeScript or JavaScript through its default export, JSON as is. Node strips the types. */
+/**
+ * Load a config file: TypeScript or JavaScript through its default export, JSON as is. jiti compiles the module, so a
+ * `.ts` config with `export default` loads whatever the `type` of the user's package.json, which Node's own type
+ * stripping does not: it reads `.ts` in a CommonJS package as CommonJS.
+ */
 export const loadConfig = async (path: string): Promise<ScenesConfig> => {
   const absolute = resolve(path);
   if (!existsSync(absolute)) {
@@ -53,7 +58,7 @@ export const loadConfig = async (path: string): Promise<ScenesConfig> => {
   const config: unknown =
     extname(absolute) === '.json'
       ? JSON.parse(readFileSync(absolute, 'utf8'))
-      : ((await import(pathToFileURL(absolute).href)) as { default?: unknown }).default;
+      : await createJiti(import.meta.url).import(absolute, { default: true });
   assertConfig(config);
   return config;
 };

@@ -9,12 +9,12 @@ into place together.
 
 ## Requirements
 
-| Software        | Minimum             | Why                                                                                                                                                             |
-| --------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| OBS Studio      | 28.0                | Ships obs-websocket 5 (5.0.1), whose frame-synced request batches with `Sleep` the script relies on.                                                            |
-| Move Transition | 2.6.2               | First release for OBS 28. The settings the script writes need 2.5.0; use 3.2 or later on OBS 31.1+.                                                             |
-| Firebot         | 5.65.0              | First release on Node 22 (Electron 39), whose global `WebSocket` the script uses to reach OBS. The rest needs 5.54.0, which added the built-in OBS integration. |
-| Node.js         | 22.18 (for the CLI) | Built-in TypeScript type stripping, which loads `config/scenes.ts` without a build step.                                                                        |
+| Software        | Minimum            | Why                                                                                                                                                             |
+| --------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OBS Studio      | 28.0               | Ships obs-websocket 5 (5.0.1), whose frame-synced request batches with `Sleep` the script relies on.                                                            |
+| Move Transition | 2.6.2              | First release for OBS 28. The settings the script writes need 2.5.0; use 3.2 or later on OBS 31.1+.                                                             |
+| Firebot         | 5.65.0             | First release on Node 22 (Electron 39), whose global `WebSocket` the script uses to reach OBS. The rest needs 5.54.0, which added the built-in OBS integration. |
+| Node.js         | 22.4 (for the CLI) | The global `WebSocket` became stable in 22.4; the tools use it to reach OBS.                                                                                    |
 
 The tools run on Windows, macOS, and Linux.
 
@@ -215,7 +215,7 @@ made in Firebot. Deleting a layout preset in Firebot's UI does not stick; remove
 
 ## Development
 
-Needs Node 22.18 or later. In this repo, `npm run <command>` runs each CLI command from source (for example
+Needs Node 22.4 or later. In this repo, `npm run <command>` runs each CLI command from source (for example
 `npm run deploy -- --skip-obs`), and `config/` is git-ignored apart from the example, so your own `config/scenes.ts`
 can live here.
 

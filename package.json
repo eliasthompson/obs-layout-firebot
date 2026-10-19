@@ -50,13 +50,14 @@
     "typecheck": "tsc --noEmit"
   },
   "engines": {
-    "node": ">=22.18"
+    "node": ">=22.4"
   },
   "publishConfig": {
     "access": "public"
   },
   "dependencies": {
-    "@eliasthompson/obs-layout-generator": "^1.1.1"
+    "@eliasthompson/obs-layout-generator": "^1.1.1",
+    "jiti": "^2.7.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -65,7 +66,6 @@
     "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-perfectionist": "^5.12.1",
-    "jiti": "^2.7.0",
     "prettier": "^3.9.10",
     "tsdown": "^0.23.1",
     "tsx": "^4.20.0",

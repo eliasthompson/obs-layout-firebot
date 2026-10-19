@@ -42,9 +42,10 @@ Before finishing a change, run typecheck, lint, format check, test coverage, and
   and list an object's keys in the same order as its type.
 - In config files (tsconfig, tsdown, ESLint, Prettier, package.json `scripts`), keep keys alphabetical and do not add
   comments.
-- Configs are TypeScript modules whose default export `satisfies ScenesConfig`, with a type-only import so Node can
-  load them by stripping types. `.js` and `.json` configs load too. A config is stored in a Firebot variable, so it
-  must stay plain JSON data.
+- Configs are TypeScript modules whose default export `satisfies ScenesConfig`, with a type-only import so they need
+  nothing from the package at runtime. The CLI loads them with jiti, not Node's type stripping, which reads `.ts` in a
+  CommonJS package as CommonJS and fails on `export default`. `.js` and `.json` configs load too. A config is stored
+  in a Firebot variable, so it must stay plain JSON data.
 - Tool settings resolve as command-line option, then environment variable, then the config's `firebot` / `obs`
   entries, then the platform default. Add new ones to `tools/lib/environment.ts`, `.env.example`, and the README.
 - The tools run on Windows, macOS, and Linux. Anything platform-specific goes through `process.platform` with a case
@@ -63,6 +64,6 @@ Before finishing a change, run typecheck, lint, format check, test coverage, and
 - Do not use `baseUrl` in tsconfig; `paths` resolves relative to the tsconfig file. `paths` also maps the package's
   own name to `src/index.ts`, so configs in `config/` import it the way a user's config would.
 - `src/` runs inside Firebot's Electron main process and uses Node built-ins and the global `WebSocket`; it is not
-  platform-neutral and does not need to be. The CLI needs Node 22.18 or later for built-in type stripping.
+  platform-neutral and does not need to be. The CLI needs Node 22.4 or later for the global `WebSocket`.
 - To work against an unreleased `@eliasthompson/obs-layout-generator`, link the sibling repo with
   `npx link ../obs-layout-generator` instead of changing the dependency in package.json.
