@@ -21,6 +21,9 @@
   "license": "MIT",
   "author": "Elias Thompson",
   "type": "module",
+  "imports": {
+    "#package.json": "./package.json"
+  },
   "bin": {
     "obs-layout-firebot": "./dist/cli.js"
   },

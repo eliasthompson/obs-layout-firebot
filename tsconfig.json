@@ -9,6 +9,7 @@
       "@/*": ["./src/*"],
       "@eliasthompson/obs-layout-firebot": ["./src/index.ts"]
     },
+    "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,
     "target": "es2022",

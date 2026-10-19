@@ -1,5 +1,6 @@
 import type { FirebotRunRequest, FirebotRunResult } from '@/types/FirebotRunRequest';
 
+import { version } from '#package.json';
 import { DEFAULT_CONFIG_VARIABLE } from '@/constants/filterNames';
 import { assertConfig } from '@/lib/assertConfig';
 import { connectObs, type ConnectObs } from '@/lib/connectObs';
@@ -11,7 +12,8 @@ export const getScriptManifest = () => ({
   name: 'OBS Layout',
   description: 'Moves OBS scene items into an obs-layout-generator layout using Move Transition filters',
   author: 'Elias Thompson',
-  version: '2.0.0',
+  // Inlined by the build, so the script Firebot shows carries the version of the package it came from
+  version,
   firebotVersion: '5',
   startupOnly: false,
 });

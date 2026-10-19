@@ -4,6 +4,7 @@ import type { ConnectObs, ObsClient } from '@/lib/connectObs';
 import type { FirebotRunRequest } from '@/types/FirebotRunRequest';
 import type { ObsBatchResult, ObsRequest } from '@/types/ObsRequest';
 
+import { version as packageVersion } from '#package.json';
 import { createRun, getDefaultParameters, getScriptManifest } from '@/lib/firebotScript';
 
 const config = {
@@ -47,7 +48,12 @@ const allOk = (count: number) =>
 
 describe('getScriptManifest', () => {
   it('describes the script for Firebot', () => {
-    expect(getScriptManifest()).toMatchObject({ name: 'OBS Layout', firebotVersion: '5', startupOnly: false });
+    expect(getScriptManifest()).toMatchObject({
+      name: 'OBS Layout',
+      version: packageVersion,
+      firebotVersion: '5',
+      startupOnly: false,
+    });
   });
 });
 
