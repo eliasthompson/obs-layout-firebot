@@ -1,0 +1,6 @@
+.env
+/config/*
+!/config/scenes.example.ts
+coverage
+dist
+node_modules

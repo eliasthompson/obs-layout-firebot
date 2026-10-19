@@ -1,0 +1,78 @@
+import type { LayoutConfig, LayoutMetric, LayoutOptions } from '@eliasthompson/obs-layout-generator';
+
+import type { ObsAlignment } from '@/constants/obsAlignment';
+
+export type LayoutRegionName = keyof LayoutMetric;
+
+export interface SourceBinding {
+  /** OBS source name of the scene item that fills the region. */
+  source: string;
+  /** OBS source name of a color source drawn as the region's border, sized by `regionBorder` and `borderPadding`. */
+  border?: string;
+  /** Pixels the source sits inside its region on every side, as padding within the border. The border is unaffected. */
+  inset?: number;
+  /** Where the source sits inside its bounds when it does not fill them, as OBS names it. Left alone when omitted. */
+  boundsAlignment?: ObsAlignment;
+  /** Text sources only: font size as a fraction of the source's own height (after the inset), set on every move. */
+  fontScale?: number;
+  /** The font stays at this size while the text fits, and only sizes down when the region is too short for it. */
+  fontSizeMax?: number;
+  /** How far the font may size down. With an inset, the layout's smallest name height is inset × 2 + fontSizeMin. */
+  fontSizeMin?: number;
+}
+
+export interface ParticipantPoolEntry {
+  sources: Partial<Record<LayoutRegionName, SourceBinding>>;
+}
+
+export interface SceneParticipant {
+  /** Key in `participants`: the OBS scene that holds this participant's items, nested in the container. */
+  layout: string;
+  config?: LayoutConfig;
+}
+
+export interface SceneBinding {
+  participants: SceneParticipant[];
+  options?: LayoutOptions;
+  /** Move duration in milliseconds. */
+  duration?: number;
+}
+
+export interface ObsConnection {
+  url: string;
+  password: string;
+}
+
+export interface ObsSettings extends Partial<ObsConnection> {
+  /** Tools only: the scene collection `fades` edits, by name. Default "Untitled". */
+  sceneCollection?: string;
+}
+
+/** Where the tools find Firebot. The script itself runs inside Firebot and ignores these. */
+export interface FirebotSettings {
+  /** Profile the tools install into and read the OBS integration from. Default "Main". */
+  profile?: string;
+  /** Firebot's local HTTP API. Default "http://localhost:7472/api/v1". */
+  apiUrl?: string;
+  /** Custom variable that holds this config, written by `deploy` and read by the presets. Default "layoutScenes". */
+  variable?: string;
+  /** Firebot executable, for `restart-firebot` where the default install location does not apply. */
+  executable?: string;
+}
+
+export interface ScenesConfig {
+  /** OBS scene that contains every participant layout scene as an item. */
+  container: string;
+  options?: LayoutOptions;
+  /** Pixels the border sources' filters add on every side; the color source is shrunk by this much. */
+  borderPadding?: number;
+  /** Move duration in milliseconds, used by scenes that do not set their own. */
+  duration?: number;
+  /** Every layout scene the installation knows, with its bound sources. */
+  participants: Record<string, ParticipantPoolEntry>;
+  /** Compositions by scene key, each listing the participants it shows in layout order. */
+  scenes: Record<string, SceneBinding>;
+  /** Overrides Firebot's OBS integration settings. */
+  obs?: ObsSettings;
+  firebot?: FirebotSettings;
+}

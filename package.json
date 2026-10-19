@@ -1,0 +1,83 @@
+{
+  "name": "@eliasthompson/obs-layout-firebot",
+  "version": "0.1.0",
+  "description": "Firebot custom script and CLI that lay out OBS scene items with obs-layout-generator and the Move Transition plugin",
+  "keywords": [
+    "firebot",
+    "layout",
+    "move-transition",
+    "obs",
+    "obs-studio",
+    "streaming"
+  ],
+  "homepage": "https://github.com/eliasthompson/obs-layout-firebot#readme",
+  "bugs": {
+    "url": "https://github.com/eliasthompson/obs-layout-firebot/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eliasthompson/obs-layout-firebot.git"
+  },
+  "license": "MIT",
+  "author": "Elias Thompson",
+  "type": "module",
+  "bin": {
+    "obs-layout-firebot": "./dist/cli.js"
+  },
+  "files": [
+    "config/scenes.example.ts",
+    "dist"
+  ],
+  "scripts": {
+    "apply": "tsx tools/cli.ts apply",
+    "build": "tsdown",
+    "capture": "tsx tools/cli.ts capture",
+    "deploy": "tsx tools/cli.ts deploy",
+    "dev": "tsdown --watch",
+    "fades": "tsx tools/cli.ts fades",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "init": "tsx tools/cli.ts init",
+    "install-script": "tsx tools/cli.ts install-script",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "prepublishOnly": "npm run typecheck && npm run lint && npm run format:check && npm run test:coverage && npm run build",
+    "restart-firebot": "tsx tools/cli.ts restart-firebot",
+    "setup": "tsx tools/cli.ts setup",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@eliasthompson/obs-layout-generator": "^1.1.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.0.0",
+    "@vitest/coverage-v8": "^5.0.5",
+    "eslint": "^10.12.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-perfectionist": "^5.12.1",
+    "jiti": "^2.7.0",
+    "prettier": "^3.9.10",
+    "tsdown": "^0.23.1",
+    "tsx": "^4.20.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^5.0.5"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts"
+}
