@@ -24,9 +24,12 @@ The script runs inside Firebot. When a preset calls it with a scene key, it:
 
 1. reads the layout config from a Firebot custom variable (`layoutScenes` by default),
 2. runs `generateLayout` for the participants that scene shows,
-3. opens its own obs-websocket connection, using the credentials from Firebot's OBS integration, and
-4. sends one request batch, executed in sync with OBS's video frames, that writes and enables a set of Move
-   Transition filters.
+3. opens its own obs-websocket connection, using the credentials from Firebot's OBS integration,
+4. with [standby screens](#standby-screens) configured, reads what OBS shows now, so it knows whether the transition
+   starts from standby, and
+5. sends one request batch, executed in sync with OBS's video frames, that writes and enables a set of Move
+   Transition filters. Moves that belong after others wait through the filters' own start delay, so the whole
+   transition is still one batch, and the next preset cuts it short at any point.
 
 The filters do the animating:
 
@@ -35,8 +38,8 @@ The filters do the animating:
 - **`Move: Width`** and **`Move: Height`** (Move Value) on each border color source: its own width and height. The
   borders carry stroke and shadow filters that render at the source's native size, so stretching them would distort
   the frame.
-- **`Opacity`** (Color Correction) plus **`Move: Opacity`** (Move Value) on every toggled source: fades. OBS's own
-  scene item show/hide Fade brightens toward white on anything with transparency, so it is not used.
+- **`Opacity`** (Color Correction) plus **`Move: Opacity`** (Move Value) on every toggled source but standby text:
+  fades. OBS's own scene item show/hide Fade brightens toward white on anything with transparency, so it is not used.
 
 Regions a layout does not use fade out while shrinking to a point at the canvas center and are hidden; when a later
 layout needs them, they fade in while growing from that point. Participant layouts a scene does not use fade out and
@@ -74,6 +77,9 @@ and the `preset-effect-lists.json` that `deploy` writes.
   how far those filters extend the source.
 - Scene items the script toggles should have **no** show/hide transition. `obs-layout-firebot fades` sets that, in the
   scene collection file, while OBS is closed.
+- For standby screens, a **standby text** scene in the container, below the participant layouts, holding one text
+  source per screen, and any standby widgets as items of the container. `setup` crops the text scene at the canvas
+  center.
 
 ## Firebot setup
 
@@ -127,10 +133,12 @@ export default {
 | `duration`      | Move duration in milliseconds. Default `300`.                                                                 |
 | `participants`  | Every layout scene the installation knows, keyed by scene name, with the source (and border) for each region. |
 | `scenes`        | Compositions by scene key: the participants shown, in layout order, each with an optional `LayoutConfig`.     |
+| `standby`       | Needed by standby scenes: `textScene` and `lineHeight`; see [Standby screens](#standby-screens).              |
 | `obs`           | Optional. `url` and `password` are used over Firebot's OBS integration settings; see [Machine settings].      |
 | `firebot`       | Optional. Where the tools find Firebot; see [Machine settings].                                               |
 
-A scene entry may carry its own `options` and `duration`. Region names are those of `LayoutMetric`: `contentMain`,
+A scene entry may carry its own `options` and `duration`, and a `standby` entry that makes it a standby screen.
+Region names are those of `LayoutMetric`: `contentMain`,
 `camera`, `contentAux`, `info`, `name`. Each bound source takes a `source`, an optional `border`, an optional
 `inset` (pixels the source sits inside its region on every side, as padding within the border, for text or widgets
 that should not touch the frame; a ratio declared for an inset region holds for the area inside the inset, so a
@@ -144,6 +152,53 @@ while the text fits and sizes down to `fontSizeMin` when the region is too short
 
 The config is stored in a Firebot variable as JSON, so it has to stay plain data: no functions, dates, or class
 instances. A `.js` or `.json` file works too; pass it with `--config`.
+
+### Standby screens
+
+A scene entry with `standby` does not lay its participants out. Instead, every region collapses into one vertical line
+at the canvas center, and a text slides out from behind it:
+
+```ts
+export default {
+  // ...
+  standby: { textScene: '[Widget] Standby Text', lineHeight: 540 },
+  scenes: {
+    // ...
+    '[Standby] Starting Soon': {
+      participants: [{ layout: '[Layout] Person 1' }],
+      standby: {
+        text: { source: '[Text] Starting Soon', region: { x: 1000, y: 480, width: 700, height: 120 } },
+        widgets: [{ source: '[Widget] Standby Clips', region: { x: 120, y: 300, width: 640, height: 480 } }],
+      },
+    },
+  },
+} satisfies ScenesConfig;
+```
+
+The transition runs in stages, each one `duration` long:
+
+| From → to         | First                                    | Then                               |
+| ----------------- | ---------------------------------------- | ---------------------------------- |
+| Layout → standby  | Regions collapse into the line           | Text slides out, widgets fade in   |
+| Standby → standby | The old text slides back behind the line | The new text slides out            |
+| Standby → layout  | Text slides back, widgets fade out       | Regions grow out to the new layout |
+
+- **The line.** Content collapses to no width at the canvas center, which leaves each border's color source two border
+  rings wide (`regionBorder` minus `borderPadding` per side), `lineHeight` tall. With an inner stroke at least a ring
+  wide, the line is solid stroke. All borders collapse onto it, but only the first participant's main border stays
+  shown (the region obs-layout-generator puts in the main column: main content, else camera, else aux content, else
+  info), so their shadows do not stack. Leaving standby for a layout whose main region is another one, that border
+  takes over the line in a single frame before the regions grow out.
+- **The text** is an item of `textScene`, which `setup` crops at the canvas center, so text slides out from behind the
+  line without fading. Its region is the bounding box: `setup` makes every standby text cover it (Scale to outer
+  bounds), aligned center left, so text relatively wider than the box runs past its right edge. Hidden text waits at
+  its region's height just left of the cut, by its rendered width, overflow included. Put `textScene` below the
+  participant layouts in the container, so the line covers the cut. Each screen has its own text source; a scene that
+  replaces another's text slides the old one back first.
+- **Widgets** are items of the container that fade in and out at their region, for example browser sources that rotate
+  their own content.
+- **What it starts from** is read from OBS on every run: which standby items show, and whether the borders were last
+  sized to the line. A transition interrupted part way plans from wherever OBS is.
 
 ### Machine settings
 
@@ -171,16 +226,16 @@ of the profile folder and the collection file. The data folders are `%APPDATA%` 
 Run as `npx obs-layout-firebot <command>`. Every command that reads the config takes `--config <path>` (default
 `config/scenes.ts`).
 
-| Command           | What it does                                                                                               |
-| ----------------- | ---------------------------------------------------------------------------------------------------------- |
-| `init`            | Creates `config/scenes.ts` from the example. Never overwrites.                                             |
-| `setup`           | Creates or updates, disabled, every filter the script drives, and gives region items a bounds type.        |
-| `install-script`  | Copies `obs-layout.js` into the profile's `scripts` folder. Restart Firebot afterwards.                    |
-| `deploy`          | Checks, stores, and syncs the presets; see below. `--skip-obs`, `--yes`, `--no-restart`, `--presets`.      |
-| `restart-firebot` | Stops Firebot, installs the presets, turns on the two settings above, and starts Firebot again.            |
-| `apply`           | `apply "<scene key>"`: applies a scene from this machine and compares every item with the plan.            |
-| `capture`         | `capture "<scene key>" --save frames/`: screenshots during a transition, or white-pixel counts without it. |
-| `fades`           | Sets the toggled scene items' show/hide transitions in the scene collection file. OBS must be closed.      |
+| Command           | What it does                                                                                                                      |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `init`            | Creates `config/scenes.ts` from the example. Never overwrites.                                                                    |
+| `setup`           | Creates or updates, disabled, every filter the script drives, gives region items a bounds type, and crops the standby text scene. |
+| `install-script`  | Copies `obs-layout.js` into the profile's `scripts` folder. Restart Firebot afterwards.                                           |
+| `deploy`          | Checks, stores, and syncs the presets; see below. `--skip-obs`, `--yes`, `--no-restart`, `--presets`.                             |
+| `restart-firebot` | Stops Firebot, installs the presets, turns on the two settings above, and starts Firebot again.                                   |
+| `apply`           | `apply "<scene key>"`: applies a scene from this machine and compares every item with the plan.                                   |
+| `capture`         | `capture "<scene key>" --save frames/`: screenshots during a transition, or white-pixel counts without it.                        |
+| `fades`           | Sets the toggled scene items' show/hide transitions in the scene collection file. OBS must be closed.                             |
 
 `restart-firebot` closes Firebot the way closing its window would and forces it after 60 seconds. While you are live
 with chat connected, Firebot asks before closing; answer it, or the close is forced. A forced close skips Firebot's

@@ -14,6 +14,7 @@ const layout: MoveStep = {
   size: undefined,
   visible: true,
   duration: 300,
+  delay: 0,
 };
 const border: MoveStep = {
   scene: '[Layout] Person 1',
@@ -24,6 +25,7 @@ const border: MoveStep = {
   size: { width: 1452, height: 822 },
   visible: true,
   duration: 300,
+  delay: 0,
 };
 const name: MoveStep = {
   scene: '[Layout] Person 1',
@@ -35,6 +37,7 @@ const name: MoveStep = {
   fontSize: 48,
   visible: true,
   duration: 300,
+  delay: 0,
 };
 
 const enable = (writes: ReturnType<typeof filterWrites>, filterEnabled: boolean) =>
@@ -76,6 +79,45 @@ describe('buildMoveRequests', () => {
       { requestType: 'Sleep', requestData: { sleepFrames: 2 } },
       ...enable(writes, true),
     ]);
+  });
+
+  it('settles a handed-off border at full opacity, then toggles every handoff in one frame before the moves', () => {
+    const heir: MoveStep = { ...border, handoff: { sceneItemId: 7, visible: true } };
+    const dropped: MoveStep = {
+      ...border,
+      source: '[Border] Content 1',
+      filterName: 'Move: [Border] Content 1',
+      visible: false,
+      handoff: { sceneItemId: 4, visible: false },
+    };
+    const requests = buildMoveRequests([heir, dropped]);
+    const index = (requestType: string, from = 0) =>
+      requests.findIndex((request, at) => at >= from && request.requestType === requestType);
+    const settle = index('Sleep');
+
+    expect(requests.filter((request) => request.requestData.filterName === 'Opacity')).toEqual([
+      {
+        requestType: 'SetSourceFilterSettings',
+        requestData: {
+          sourceName: '[Border] Camera 1',
+          filterName: 'Opacity',
+          filterSettings: { opacity: 1 },
+          overlay: true,
+        },
+      },
+    ]);
+    expect(index('SetSourceFilterSettings', settle)).toBe(-1);
+    expect(requests.slice(settle + 1, settle + 3)).toEqual([
+      {
+        requestType: 'SetSceneItemEnabled',
+        requestData: { sceneName: '[Layout] Person 1', sceneItemId: 7, sceneItemEnabled: true },
+      },
+      {
+        requestType: 'SetSceneItemEnabled',
+        requestData: { sceneName: '[Layout] Person 1', sceneItemId: 4, sceneItemEnabled: false },
+      },
+    ]);
+    expect(requests[settle + 3]?.requestType).toBe('SetSourceFilterEnabled');
   });
 
   it('builds just the settle sleep for no steps', () => {

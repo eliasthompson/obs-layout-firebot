@@ -31,6 +31,26 @@ describe('listBindings', () => {
     ]);
   });
 
+  it('lists the standby texts and widgets after the participants', () => {
+    const region = { x: 0, y: 0, width: 10, height: 10 };
+    const withStandby: ScenesConfig = {
+      ...config,
+      participants: {},
+      standby: { textScene: 'Standby Text', lineHeight: 540 },
+      scenes: {
+        soon: {
+          participants: [],
+          standby: { text: { source: 'Soon', region }, widgets: [{ source: 'Clips', region }] },
+        },
+      },
+    };
+
+    expect(listBindings(withStandby)).toEqual([
+      { scene: 'Standby Text', source: 'Soon', kind: 'text', boundsAlignment: 1 },
+      { scene: '[Scene] Content', source: 'Clips', kind: 'widget' },
+    ]);
+  });
+
   it('lists nothing for an empty pool', () => {
     expect(listBindings({ ...config, participants: {} })).toEqual([]);
   });

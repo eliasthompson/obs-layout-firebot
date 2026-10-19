@@ -13,10 +13,14 @@ import {
   MOVE_VALUE_TYPE_SINGLE_SETTING,
 } from '@/constants/moveTransition';
 
-/** Settings shared by every Move filter: custom duration, easing, and self-disabling when the move ends. */
-export const moveTiming = (duration: number) => ({
+/**
+ * Settings shared by every Move filter: custom duration, a start delay for staged moves, easing, and self-disabling
+ * when the move ends.
+ */
+export const moveTiming = (duration: number, delay: number) => ({
   custom_duration: true,
   duration,
+  start_delay: delay,
   easing_match: EASE_IN_OUT,
   easing_function_match: EASING_CUBIC,
   enabled_match_moving: true,
@@ -37,7 +41,7 @@ export const moveFilterSettings = (step: MoveStep, region: LayoutRegion) => ({
   scale: { x: 1, y: 1 },
   rot: 0,
   crop: { left: 0, top: 0, right: 0, bottom: 0 },
-  ...moveTiming(step.duration),
+  ...moveTiming(step.duration, step.delay),
   change_visibility: changeVisibility(step),
 });
 
@@ -45,18 +49,18 @@ export const moveFilterSettings = (step: MoveStep, region: LayoutRegion) => ({
 export const visibilityFilterSettings = (step: MoveStep) => ({
   source: step.source,
   transform: false,
-  ...moveTiming(step.duration),
+  ...moveTiming(step.duration, step.delay),
   change_visibility: changeVisibility(step),
 });
 
 /** Move Value filter settings animating one integer setting of the source the filter is attached to. */
-export const intSettingFilterSettings = (settingName: string, value: number, duration: number) => ({
+export const intSettingFilterSettings = (settingName: string, value: number, duration: number, delay: number) => ({
   move_value_type: MOVE_VALUE_TYPE_SINGLE_SETTING,
   filter: '',
   setting_name: settingName,
   value_type: MOVE_VALUE_INT,
   setting_int: value,
-  ...moveTiming(duration),
+  ...moveTiming(duration, delay),
 });
 
 /** Move Value filter settings animating the Opacity filter's `opacity` to 1 (shown) or 0 (hidden). */
@@ -66,5 +70,5 @@ export const opacityMoveFilterSettings = (step: MoveStep) => ({
   setting_name: 'opacity',
   value_type: MOVE_VALUE_FLOAT,
   setting_float: step.visible ? 1 : 0,
-  ...moveTiming(step.duration),
+  ...moveTiming(step.duration, step.delay),
 });

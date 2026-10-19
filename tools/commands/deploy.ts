@@ -37,7 +37,8 @@ const readObsInventory = async (config: ScenesConfig): Promise<ObsInventory> => 
   try {
     const { scenes } = (await client.call('GetSceneList')) as { scenes: { sceneName: string }[] };
     const sceneNames = new Set(scenes.map((scene) => scene.sceneName));
-    for (const scene of new Set([config.container, ...Object.keys(config.participants)])) {
+    const textScenes = config.standby ? [config.standby.textScene] : [];
+    for (const scene of new Set([config.container, ...textScenes, ...Object.keys(config.participants)])) {
       if (!sceneNames.has(scene)) continue;
       const { sceneItems } = (await client.call('GetSceneItemList', { sceneName: scene })) as {
         sceneItems: { sourceName: string; inputKind?: string }[];

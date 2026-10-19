@@ -1,4 +1,4 @@
-import type { LayoutConfig, LayoutMetric, LayoutOptions } from '@eliasthompson/obs-layout-generator';
+import type { LayoutConfig, LayoutMetric, LayoutOptions, LayoutRegion } from '@eliasthompson/obs-layout-generator';
 
 import type { ObsAlignment } from '@/constants/obsAlignment';
 
@@ -31,11 +31,39 @@ export interface SceneParticipant {
   config?: LayoutConfig;
 }
 
+export interface OverlayBinding {
+  /** OBS source name of the item. */
+  source: string;
+  /** Where the item sits while shown, in canvas pixels. */
+  region: LayoutRegion;
+  /** Where the source sits inside its bounds when it does not fill them, as OBS names it. Left alone when omitted. */
+  boundsAlignment?: ObsAlignment;
+}
+
+export interface StandbyBinding {
+  /**
+   * An item of the standby text scene that slides out from behind the line. Its region is the bounding box, which the
+   * text covers from the left, centered vertically, so text wider than the box runs past its right edge.
+   */
+  text?: Omit<OverlayBinding, 'boundsAlignment'>;
+  /** Items of the container that fade in at their regions while the text slides out. */
+  widgets?: OverlayBinding[];
+}
+
 export interface SceneBinding {
   participants: SceneParticipant[];
   options?: LayoutOptions;
   /** Move duration in milliseconds. */
   duration?: number;
+  /** Collapse the participants' regions into the standby line instead of laying them out, and show these overlays. */
+  standby?: StandbyBinding;
+}
+
+export interface StandbySettings {
+  /** Scene in the container, below the participant layouts, that holds every standby text and hides what is left of the line. */
+  textScene: string;
+  /** Height of the line in pixels. Its width is the border ring on both sides: 2 × (regionBorder − borderPadding). */
+  lineHeight: number;
 }
 
 export interface ObsConnection {
@@ -72,6 +100,8 @@ export interface ScenesConfig {
   participants: Record<string, ParticipantPoolEntry>;
   /** Compositions by scene key, each listing the participants it shows in layout order. */
   scenes: Record<string, SceneBinding>;
+  /** Needed by scenes with a `standby` entry. */
+  standby?: StandbySettings;
   /** Overrides Firebot's OBS integration settings. */
   obs?: ObsSettings;
   firebot?: FirebotSettings;

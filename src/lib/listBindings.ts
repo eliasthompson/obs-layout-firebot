@@ -2,10 +2,14 @@ import type { Binding } from '@/types/MoveStep';
 import type { ScenesConfig } from '@/types/ScenesConfig';
 
 import { OBS_ALIGNMENT_FLAGS } from '@/constants/obsAlignment';
+import { listOverlays } from '@/lib/listOverlays';
 
-/** Every item an installation needs filters for: layout items in the container, then each layout's sources and borders. */
-export const listBindings = (config: ScenesConfig): Binding[] =>
-  Object.entries(config.participants).flatMap(([layout, entry]) => [
+/**
+ * Every item an installation needs filters for: layout items in the container, then each layout's sources and
+ * borders, then the standby texts and widgets.
+ */
+export const listBindings = (config: ScenesConfig): Binding[] => [
+  ...Object.entries(config.participants).flatMap(([layout, entry]) => [
     { scene: config.container, source: layout, kind: 'layout' as const },
     ...Object.values(entry.sources).flatMap((binding): Binding[] => [
       {
@@ -16,4 +20,6 @@ export const listBindings = (config: ScenesConfig): Binding[] =>
       },
       ...(binding.border ? [{ scene: layout, source: binding.border, kind: 'border' as const }] : []),
     ]),
-  ]);
+  ]),
+  ...listOverlays(config).map((overlay) => overlay.binding),
+];

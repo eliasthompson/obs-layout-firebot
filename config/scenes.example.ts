@@ -40,7 +40,14 @@ export default {
       ],
       duration: 500,
     },
+    // A standby screen: the regions collapse into a line at the canvas center and the text slides out from behind it
+    '[Standby] Starting Soon': {
+      participants: [{ layout: '[Layout] Person 1' }],
+      standby: { text: { source: '[Text] Starting Soon', region: { x: 1000, y: 480, width: 700, height: 120 } } },
+    },
   },
+  // The scene in the container that holds the standby texts, and the height of the standby line
+  standby: { textScene: '[Widget] Standby Text', lineHeight: 540 },
   // Optional: where the tools find OBS and Firebot when the defaults do not fit this machine
   // obs: { url: 'ws://localhost:4455', password: '', sceneCollection: 'Untitled' },
   // firebot: { profile: 'Main', apiUrl: 'http://localhost:7472/api/v1', variable: 'layoutScenes' },

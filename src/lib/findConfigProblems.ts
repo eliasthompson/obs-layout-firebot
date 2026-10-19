@@ -1,3 +1,5 @@
+import { LAYOUT_OPTIONS_DEFAULT } from '@eliasthompson/obs-layout-generator';
+
 import type { ConfigProblem, ObsInventory } from '@/types/ObsInventory';
 import type { ScenesConfig } from '@/types/ScenesConfig';
 
@@ -8,6 +10,7 @@ import {
   WIDTH_FILTER_NAME,
 } from '@/constants/filterNames';
 import { listBindings } from '@/lib/listBindings';
+import { listOverlays } from '@/lib/listOverlays';
 import { moveFilterName } from '@/lib/moveFilterName';
 
 const SETUP_HINT = 'run `obs-layout-firebot setup`';
@@ -48,12 +51,54 @@ export const findConfigProblems = (config: ScenesConfig, inventory: ObsInventory
     }
   }
 
+  if (Object.values(config.scenes).some((scene) => scene.standby)) {
+    if (config.standby) {
+      const { textScene } = config.standby;
+      const regionBorder = config.options?.regionBorder ?? LAYOUT_OPTIONS_DEFAULT.regionBorder;
+      const borderPadding = config.borderPadding ?? 0;
+      if (regionBorder <= borderPadding) {
+        error(
+          `the standby line is two border rings wide, so options.regionBorder (${String(regionBorder)}) must be larger than borderPadding (${String(borderPadding)})`,
+        );
+      }
+      if (!hasScene(textScene)) error(`standby text scene "${textScene}" does not exist in OBS`);
+      else if (hasScene(config.container)) {
+        // Items are listed bottom to top
+        const items = inventory.sceneItems[config.container];
+        const textIndex = items.indexOf(textScene);
+        const below = Object.keys(config.participants).filter((layout) => {
+          const index = items.indexOf(layout);
+          return index !== -1 && index < textIndex;
+        });
+        if (textIndex === -1) {
+          error(`standby text scene "${textScene}" is not an item of the container "${config.container}"`);
+        } else if (below.length) {
+          warning(
+            `standby text scene "${textScene}" sits above ${below.map((layout) => `"${layout}"`).join(', ')} in "${config.container}"; move it below so the line covers the text as it slides out`,
+          );
+        }
+      }
+    } else {
+      error('scenes use standby, but the config has no standby settings (textScene, lineHeight)');
+    }
+    for (const { binding } of listOverlays(config)) {
+      if (hasScene(binding.scene) && !hasItem(binding.scene, binding.source)) {
+        error(`"${binding.scene}" has no item "${binding.source}" (standby ${binding.kind})`);
+      }
+    }
+  }
+
   const missingFilters = listBindings(config).flatMap(({ scene, source, kind }) => {
     if (!hasScene(scene) || !hasItem(scene, source)) return [];
     const wanted = [
       [scene, moveFilterName(source)],
-      [source, OPACITY_FILTER_NAME],
-      [source, OPACITY_MOVE_FILTER_NAME],
+      // Standby text never fades
+      ...(kind === 'text'
+        ? []
+        : [
+            [source, OPACITY_FILTER_NAME],
+            [source, OPACITY_MOVE_FILTER_NAME],
+          ]),
       ...(kind === 'border'
         ? [
             [source, WIDTH_FILTER_NAME],

@@ -1,7 +1,13 @@
 import type { MoveStep } from '@/types/MoveStep';
 import type { FilterWrite, ObsRequest } from '@/types/ObsRequest';
 
-import { HEIGHT_FILTER_NAME, SETTLE_FRAMES, SIZE_LEAD_FRAMES, WIDTH_FILTER_NAME } from '@/constants/filterNames';
+import {
+  HEIGHT_FILTER_NAME,
+  OPACITY_FILTER_NAME,
+  SETTLE_FRAMES,
+  SIZE_LEAD_FRAMES,
+  WIDTH_FILTER_NAME,
+} from '@/constants/filterNames';
 import { filterWrites } from '@/lib/filterWrites';
 
 const isSizeWrite = (write: FilterWrite) =>
@@ -15,6 +21,10 @@ const isSizeWrite = (write: FilterWrite) =>
  * Border size filters are enabled a frame before the rest, because the sizes they write reach the screen a frame
  * later than the item transforms the other filters write. Font sizes cannot be animated and are set with the
  * filter settings.
+ *
+ * A handoff passes the standby line to another border: the new border's opacity is set to full with the filter
+ * settings, so it has settled by the time both items toggle in the same frame after the sleep, and the line never
+ * blinks or doubles up.
  */
 export const buildMoveRequests = (steps: MoveStep[]): ObsRequest[] => {
   const writes = steps.flatMap(filterWrites);
@@ -33,6 +43,26 @@ export const buildMoveRequests = (steps: MoveStep[]): ObsRequest[] => {
           },
         ],
   );
+  const handoffs = steps.flatMap((step) => (step.handoff ? [{ step, handoff: step.handoff }] : []));
+  const handoffOpacities = handoffs.flatMap(({ step, handoff }): ObsRequest[] =>
+    handoff.visible
+      ? [
+          {
+            requestType: 'SetSourceFilterSettings',
+            requestData: {
+              sourceName: step.source,
+              filterName: OPACITY_FILTER_NAME,
+              filterSettings: { opacity: 1 },
+              overlay: true,
+            },
+          },
+        ]
+      : [],
+  );
+  const handoffToggles = handoffs.map(({ step, handoff }): ObsRequest => ({
+    requestType: 'SetSceneItemEnabled',
+    requestData: { sceneName: step.scene, sceneItemId: handoff.sceneItemId, sceneItemEnabled: handoff.visible },
+  }));
   const sizeWrites = writes.filter(isSizeWrite);
   const otherWrites = writes.filter((write) => !isSizeWrite(write));
 
@@ -43,7 +73,9 @@ export const buildMoveRequests = (steps: MoveStep[]): ObsRequest[] => {
       requestData: { ...write, overlay: false },
     })),
     ...fontSizes,
+    ...handoffOpacities,
     { requestType: 'Sleep', requestData: { sleepFrames: SETTLE_FRAMES } },
+    ...handoffToggles,
     ...setEnabled(sizeWrites, true),
     ...(sizeWrites.length ? [{ requestType: 'Sleep', requestData: { sleepFrames: SIZE_LEAD_FRAMES } }] : []),
     ...setEnabled(otherWrites, true),

@@ -32,7 +32,8 @@ export const apply = async (args: string[]) => {
     console.log(`  ${result.requestType}: ${String(result.requestStatus.code)} ${result.requestStatus.comment ?? ''}`);
   }
 
-  await sleep((summary.steps[0]?.duration ?? 300) + 500);
+  // Staged moves end when the last stage does
+  await sleep(Math.max(0, ...summary.steps.map((step) => step.delay + step.duration)) + 500);
 
   const client = await connectObs(connection);
   const itemIds = new Map<string, number>();
@@ -55,11 +56,16 @@ export const apply = async (args: string[]) => {
         .sceneItemTransform as { positionX: number; positionY: number; boundsWidth: number; boundsHeight: number };
       const enabled = (await client.call('GetSceneItemEnabled', { sceneName: step.scene, sceneItemId: id }))
         .sceneItemEnabled as boolean;
+      // Standby text has no Opacity filter: it never fades
       const opacity =
-        (
-          (await client.call('GetSourceFilter', { sourceName: step.source, filterName: OPACITY_FILTER_NAME }))
-            .filterSettings as { opacity?: number }
-        ).opacity ?? 1;
+        step.kind === 'text'
+          ? step.visible
+            ? 1
+            : 0
+          : ((
+              (await client.call('GetSourceFilter', { sourceName: step.source, filterName: OPACITY_FILTER_NAME }))
+                .filterSettings as { opacity?: number }
+            ).opacity ?? 1);
       let fontNote = '';
       let fontOk = true;
       if (step.fontSize !== undefined) {

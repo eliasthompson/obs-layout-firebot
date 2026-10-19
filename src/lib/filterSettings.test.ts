@@ -19,14 +19,16 @@ const shown: MoveStep = {
   size: undefined,
   visible: true,
   duration: 300,
+  delay: 0,
 };
 const hidden: MoveStep = { ...shown, visible: false, duration: 500 };
 
 describe('moveTiming', () => {
-  it('uses a custom duration with cubic ease in-out and self-disabling', () => {
-    expect(moveTiming(250)).toEqual({
+  it('uses a custom duration and start delay with cubic ease in-out and self-disabling', () => {
+    expect(moveTiming(250, 300)).toEqual({
       custom_duration: true,
       duration: 250,
+      start_delay: 300,
       easing_match: 3,
       easing_function_match: 2,
       enabled_match_moving: true,
@@ -44,15 +46,16 @@ describe('moveFilterSettings', () => {
       scale: { x: 1, y: 1 },
       rot: 0,
       crop: { left: 0, top: 0, right: 0, bottom: 0 },
-      ...moveTiming(300),
+      ...moveTiming(300, 0),
       change_visibility: 1,
     });
   });
 
-  it('hides at the end for hidden steps', () => {
-    expect(moveFilterSettings(hidden, { x: 1, y: 2, width: 3, height: 4 })).toMatchObject({
+  it('hides at the end for hidden steps, and waits out the step delay', () => {
+    expect(moveFilterSettings({ ...hidden, delay: 300 }, { x: 1, y: 2, width: 3, height: 4 })).toMatchObject({
       change_visibility: 2,
       duration: 500,
+      start_delay: 300,
     });
   });
 });
@@ -62,7 +65,7 @@ describe('visibilityFilterSettings', () => {
     expect(visibilityFilterSettings(shown)).toEqual({
       source: '[Group] Camera 1',
       transform: false,
-      ...moveTiming(300),
+      ...moveTiming(300, 0),
       change_visibility: 1,
     });
     expect(visibilityFilterSettings(hidden)).toMatchObject({ change_visibility: 2 });
@@ -71,13 +74,13 @@ describe('visibilityFilterSettings', () => {
 
 describe('intSettingFilterSettings', () => {
   it('animates one integer setting of the attached source', () => {
-    expect(intSettingFilterSettings('width', 1452, 300)).toEqual({
+    expect(intSettingFilterSettings('width', 1452, 300, 0)).toEqual({
       move_value_type: 0,
       filter: '',
       setting_name: 'width',
       value_type: 1,
       setting_int: 1452,
-      ...moveTiming(300),
+      ...moveTiming(300, 0),
     });
   });
 });
@@ -90,7 +93,7 @@ describe('opacityMoveFilterSettings', () => {
       setting_name: 'opacity',
       value_type: 2,
       setting_float: 1,
-      ...moveTiming(300),
+      ...moveTiming(300, 0),
     });
     expect(opacityMoveFilterSettings(hidden)).toMatchObject({ setting_float: 0, duration: 500 });
   });

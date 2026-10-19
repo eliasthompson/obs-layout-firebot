@@ -1,6 +1,7 @@
 import type { LayoutRegion } from '@eliasthompson/obs-layout-generator';
 
-export type BindingKind = 'border' | 'layout' | 'source';
+/** `text` items slide out from behind the standby line without fading; `widget` items fade in place. */
+export type BindingKind = 'border' | 'layout' | 'source' | 'text' | 'widget';
 
 export interface Binding {
   /** OBS scene that contains the item. */
@@ -28,4 +29,14 @@ export interface MoveStep extends Binding {
   fontSize?: number;
   visible: boolean;
   duration: number;
+  /** Milliseconds the move waits before starting, so a later stage starts when an earlier one ends. */
+  delay: number;
+  /** Shown or hidden in one frame before any move starts, to hand the standby line from one border to another. */
+  handoff?: Handoff;
+}
+
+export interface Handoff {
+  /** The item's id in `scene`, which SetSceneItemEnabled needs. */
+  sceneItemId: number;
+  visible: boolean;
 }

@@ -12,3 +12,8 @@ export const OBS_ALIGNMENT_FLAGS = Object.freeze({
 } as const);
 
 export type ObsAlignment = keyof typeof OBS_ALIGNMENT_FLAGS;
+
+/** Standby text covers its bounding box from the left, so text wider than the box runs past the right edge only. */
+export const STANDBY_TEXT_ALIGNMENT: ObsAlignment = 'center left';
+/** The bounds type of standby text: the text covers its whole bounding box. */
+export const STANDBY_TEXT_BOUNDS_TYPE = 'OBS_BOUNDS_SCALE_OUTER';

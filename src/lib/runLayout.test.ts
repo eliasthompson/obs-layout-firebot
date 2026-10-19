@@ -54,6 +54,45 @@ describe('runLayout', () => {
     expect(summary.durationMs).toBeGreaterThanOrEqual(0);
   });
 
+  it('reads what OBS shows first when the config has standby settings, and plans from it', async () => {
+    const standby: ScenesConfig = {
+      ...config,
+      participants: { L: { sources: { camera: { source: 'cam', border: 'camBorder' } } } },
+      standby: { textScene: 'T', lineHeight: 540 },
+    };
+    const { client, connect } = fakeConnect([]);
+    const missing = { result: false, code: 600 };
+    vi.mocked(client.callBatch).mockResolvedValueOnce([
+      {
+        requestType: 'GetSceneItemList',
+        requestStatus: { result: true, code: 100 },
+        responseData: { sceneItems: [{ sourceName: 'L', sceneItemId: 1, sceneItemEnabled: false }] },
+      },
+      { requestType: 'GetSceneItemList', requestStatus: missing },
+      { requestType: 'GetSceneItemList', requestStatus: missing },
+      { requestType: 'GetSourceFilter', requestStatus: missing },
+    ]);
+
+    const summary = await runLayout({ config: standby, sceneKey: 'only', connection, connect });
+
+    expect(client.callBatch).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(client.callBatch).mock.calls[0]?.[1]).toBe(0);
+    expect(summary.steps).toEqual(
+      planLayoutMoves(standby, 'only', {
+        sceneItems: { C: [{ sourceName: 'L', sceneItemId: 1, sceneItemEnabled: false }] },
+        borderWidths: {},
+      }),
+    );
+    expect(client.callBatch).toHaveBeenLastCalledWith(summary.requests, 1);
+  });
+
+  it('rejects an unknown scene key without connecting', async () => {
+    const { connect } = fakeConnect([]);
+
+    await expect(runLayout({ config, sceneKey: 'nope', connection, connect })).rejects.toThrow('No scene "nope"');
+    expect(connect).not.toHaveBeenCalled();
+  });
+
   it('closes the connection even when the batch fails', async () => {
     const { client, connect } = fakeConnect([]);
     vi.mocked(client.callBatch).mockRejectedValueOnce(new Error('gone'));

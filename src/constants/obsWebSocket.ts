@@ -14,6 +14,8 @@ export const OBS_OP_REQUEST_RESPONSE = 7;
 export const OBS_OP_REQUEST_BATCH = 8;
 export const OBS_OP_REQUEST_BATCH_RESPONSE = 9;
 
+/** Runs a batch as fast as possible, for reads that need no frame sync. */
+export const REQUEST_BATCH_EXECUTION_SERIAL_REALTIME = 0;
 /** Runs a batch in sync with OBS's video frames; `Sleep` requests inside it count frames. */
 export const REQUEST_BATCH_EXECUTION_SERIAL_FRAME = 1;
 

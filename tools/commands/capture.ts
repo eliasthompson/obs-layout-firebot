@@ -113,7 +113,8 @@ export const capture = async (args: string[]) => {
     })();
 
     const summary = await runLayout({ config, sceneKey, connection });
-    await sleep((steps[0]?.duration ?? 300) + 500);
+    // Staged moves end when the last stage does
+    await sleep(Math.max(0, ...summary.steps.map((step) => step.delay + step.duration)) + 500);
     sampling.active = false;
     await sampler;
 

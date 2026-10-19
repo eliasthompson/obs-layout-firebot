@@ -9,7 +9,10 @@ import {
   visibilityFilterSettings,
 } from '@/lib/filterSettings';
 
-/** Every filter a step drives, with the settings to write: its move, its border size, and its fade. */
+/**
+ * Every filter a step drives, with the settings to write: its move, its border size, and its fade. Standby text never
+ * fades; it slides out of sight behind the text scene's crop.
+ */
 export const filterWrites = (step: MoveStep): FilterWrite[] => [
   {
     sourceName: step.scene,
@@ -21,14 +24,22 @@ export const filterWrites = (step: MoveStep): FilterWrite[] => [
         {
           sourceName: step.source,
           filterName: WIDTH_FILTER_NAME,
-          filterSettings: intSettingFilterSettings('width', step.size.width, step.duration),
+          filterSettings: intSettingFilterSettings('width', step.size.width, step.duration, step.delay),
         },
         {
           sourceName: step.source,
           filterName: HEIGHT_FILTER_NAME,
-          filterSettings: intSettingFilterSettings('height', step.size.height, step.duration),
+          filterSettings: intSettingFilterSettings('height', step.size.height, step.duration, step.delay),
         },
       ]
     : []),
-  { sourceName: step.source, filterName: OPACITY_MOVE_FILTER_NAME, filterSettings: opacityMoveFilterSettings(step) },
+  ...(step.kind === 'text'
+    ? []
+    : [
+        {
+          sourceName: step.source,
+          filterName: OPACITY_MOVE_FILTER_NAME,
+          filterSettings: opacityMoveFilterSettings(step),
+        },
+      ]),
 ];

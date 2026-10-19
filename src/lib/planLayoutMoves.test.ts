@@ -63,6 +63,7 @@ describe('planLayoutMoves', () => {
       size: undefined,
       visible: true,
       duration: 300,
+      delay: 0,
     });
     expect(steps[1]).toMatchObject({ scene: '[Layout] Person 1', kind: 'source', region: metric.contentMain });
     expect(steps[2]).toMatchObject({
@@ -251,5 +252,228 @@ describe('planLayoutMoves', () => {
     expect(() =>
       planLayoutMoves({ ...config, scenes: { bad: { participants: [{ layout: 'ghost' }] } } }, 'bad'),
     ).toThrow('unknown participant "ghost"');
+  });
+});
+
+describe('planLayoutMoves standby', () => {
+  const soonRegion = { x: 1000, y: 480, width: 700, height: 120 };
+  const brbRegion = { x: 1000, y: 480, width: 640, height: 120 };
+  const clipsRegion = { x: 100, y: 300, width: 600, height: 480 };
+  const standby: ScenesConfig = {
+    container: '[Scene] Canvas',
+    options,
+    borderPadding: 9,
+    duration: 300,
+    standby: { textScene: '[Widget] Standby Text', lineHeight: 540 },
+    participants: {
+      '[Layout] Person 1': {
+        sources: {
+          contentMain: { source: 'main', border: 'mainBorder' },
+          camera: { source: 'cam', border: 'camBorder' },
+          info: { source: 'info', border: 'infoBorder' },
+          name: { source: 'name', inset: 12, fontScale: 0.45 },
+        },
+      },
+      '[Layout] Person 2': { sources: { camera: { source: 'cam2', border: 'cam2Border' } } },
+    },
+    scenes: {
+      '16:9': { participants: [{ layout: '[Layout] Person 1' }] },
+      camera: { participants: [{ layout: '[Layout] Person 1', config: { contentMainAspectRatio: null } }] },
+      soon: {
+        participants: [{ layout: '[Layout] Person 1' }],
+        standby: {
+          text: { source: 'soonText', region: soonRegion },
+          widgets: [{ source: 'clips', region: clipsRegion }],
+        },
+      },
+      brb: {
+        participants: [{ layout: '[Layout] Person 1' }],
+        standby: {
+          text: { source: 'brbText', region: brbRegion },
+          widgets: [{ source: 'clips', region: clipsRegion }],
+        },
+      },
+      both: {
+        participants: [{ layout: '[Layout] Person 1' }, { layout: '[Layout] Person 2' }],
+        standby: {},
+      },
+    },
+  };
+  // The line: no content width at the center, a 30x558 border box, and a 12x540 color source
+  const content = { x: 960, y: 276, width: 0, height: 528 };
+  const line = { x: 945, y: 261, width: 30, height: 558 };
+  const lineSize = { width: 12, height: 540 };
+
+  /** OBS state with the items of each scene shown or not; items get ids in listed order from 1. */
+  const stateOf = (scenes: Record<string, Record<string, boolean>>, borderWidths: Record<string, number> = {}) => ({
+    sceneItems: Object.fromEntries(
+      Object.entries(scenes).map(([scene, items]) => [
+        scene,
+        Object.entries(items).map(([sourceName, sceneItemEnabled], index) => ({
+          sourceName,
+          sceneItemId: index + 1,
+          sceneItemEnabled,
+        })),
+      ]),
+    ),
+    borderWidths,
+  });
+  const collapsed = { mainBorder: 12, camBorder: 12, infoBorder: 12 };
+  const bySource = (steps: ReturnType<typeof planLayoutMoves>) =>
+    Object.fromEntries(steps.map((step) => [step.source, step]));
+
+  it('collapses the regions into the line, keeps the main border showing, then brings in the overlays', () => {
+    const from16x9 = stateOf({
+      '[Layout] Person 1': { main: true, mainBorder: true, cam: true, camBorder: true, infoBorder: false },
+    });
+    const steps = bySource(planLayoutMoves(standby, 'soon', from16x9));
+
+    expect(steps['[Layout] Person 1']).toMatchObject({ visible: true, delay: 0 });
+    for (const source of ['main', 'cam', 'info', 'name']) {
+      expect(steps[source]).toMatchObject({ region: content, visible: false, delay: 0 });
+      expect(steps[source].fontSize).toBeUndefined();
+    }
+    expect(steps.mainBorder).toMatchObject({ region: line, size: lineSize, visible: true, delay: 0 });
+    expect(steps.camBorder).toMatchObject({ region: line, size: lineSize, visible: false, delay: 0 });
+    expect(steps.infoBorder).toMatchObject({ region: line, size: lineSize, visible: false });
+    expect(steps.soonText).toEqual({
+      scene: '[Widget] Standby Text',
+      source: 'soonText',
+      kind: 'text',
+      filterName: 'Move: soonText',
+      region: soonRegion,
+      size: undefined,
+      visible: true,
+      duration: 300,
+      delay: 300,
+    });
+    expect(steps.clips).toMatchObject({ scene: '[Scene] Canvas', kind: 'widget', region: clipsRegion, delay: 300 });
+    // Unused text waits left of the cut at the line's middle; without a reported size, by its box
+    expect(steps.brbText).toMatchObject({ region: { ...brbRegion, x: 960 - 640 }, visible: false, delay: 0 });
+    expect(Object.values(steps).some((step) => step.handoff)).toBe(false);
+  });
+
+  it('hides text that covers its box past the right edge far enough left that none of it shows', () => {
+    const sized = (width: number, height: number) => ({
+      ...stateOf({}),
+      sceneItems: {
+        '[Widget] Standby Text': [
+          { sourceName: 'brbText', sceneItemId: 1, sceneItemEnabled: false, sourceSize: { width, height } },
+        ],
+      },
+    });
+    const hiddenX = (width: number, height: number) =>
+      bySource(planLayoutMoves(standby, 'soon', sized(width, height))).brbText.region?.x;
+
+    // 1100x200 text covers the 640x120 box at 0.6 scale, 660 wide: 20 px past the box
+    expect(hiddenX(1100, 200)).toBe(960 - 660);
+    // Text relatively taller than the box covers it at the box width, overflowing above and below instead
+    expect(hiddenX(300, 200)).toBe(960 - 640);
+    // An empty text reports no height, and the box decides
+    expect(hiddenX(0, 0)).toBe(960 - 640);
+  });
+
+  it('keeps whichever main border shows now, and the first one when none does', () => {
+    const fromCamera = stateOf({ '[Layout] Person 1': { mainBorder: false, camBorder: true } });
+
+    expect(bySource(planLayoutMoves(standby, 'soon', fromCamera)).camBorder.visible).toBe(true);
+    expect(bySource(planLayoutMoves(standby, 'soon', fromCamera)).mainBorder.visible).toBe(false);
+    expect(bySource(planLayoutMoves(standby, 'soon')).mainBorder.visible).toBe(true);
+  });
+
+  it('collapses later participants without a line of their own', () => {
+    const steps = bySource(planLayoutMoves(standby, 'both'));
+
+    expect(steps['[Layout] Person 2']).toMatchObject({ visible: true });
+    expect(steps.cam2Border).toMatchObject({ region: line, visible: false });
+    expect(steps.mainBorder.visible).toBe(true);
+    expect(steps.soonText).toMatchObject({ visible: false, delay: 0 });
+  });
+
+  it('slides one text back before the next slides out, leaving a shared widget where it is', () => {
+    const fromSoon = stateOf(
+      {
+        '[Scene] Canvas': { '[Layout] Person 1': true, clips: true },
+        '[Widget] Standby Text': { soonText: true, brbText: false },
+        '[Layout] Person 1': { mainBorder: true },
+      },
+      collapsed,
+    );
+    const steps = bySource(planLayoutMoves(standby, 'brb', fromSoon));
+
+    expect(steps.soonText).toMatchObject({ region: { ...soonRegion, x: 260 }, visible: false, delay: 0 });
+    expect(steps.brbText).toMatchObject({ region: brbRegion, visible: true, delay: 300 });
+    expect(steps.clips).toMatchObject({ visible: true, delay: 0 });
+    expect(steps.mainBorder).toMatchObject({ region: line, visible: true, delay: 300 });
+  });
+
+  it('leaving standby, slides the text back and fades the widgets first, then grows the regions out', () => {
+    const fromSoon = stateOf(
+      {
+        '[Scene] Canvas': { clips: true },
+        '[Widget] Standby Text': { soonText: true },
+        '[Layout] Person 1': { main: false, mainBorder: true, cam: false, camBorder: false, infoBorder: false },
+      },
+      collapsed,
+    );
+    const steps = bySource(planLayoutMoves(standby, '16:9', fromSoon));
+
+    expect(steps.soonText).toMatchObject({ region: { ...soonRegion, x: 260 }, visible: false, delay: 0 });
+    expect(steps.clips).toMatchObject({ region: clipsRegion, visible: false, delay: 0 });
+    expect(steps['[Layout] Person 1']).toMatchObject({ visible: true, delay: 300 });
+    expect(steps.main).toMatchObject({ visible: true, delay: 300 });
+    expect(steps.camBorder).toMatchObject({ visible: true, delay: 300 });
+    // The main border already holds the line, so nothing is handed off
+    expect(Object.values(steps).some((step) => step.handoff)).toBe(false);
+  });
+
+  it("hands the line to the new layout's main border in one frame when another border holds it", () => {
+    const fromSoon = stateOf({ '[Layout] Person 1': { mainBorder: true, cam: false, camBorder: false } }, collapsed);
+    const steps = bySource(planLayoutMoves(standby, 'camera', fromSoon));
+
+    expect(steps.camBorder).toMatchObject({ visible: true, handoff: { sceneItemId: 3, visible: true } });
+    expect(steps.mainBorder).toMatchObject({ visible: false, handoff: { sceneItemId: 1, visible: false } });
+    // A border OBS did not report is left alone
+    expect(steps.infoBorder.handoff).toBeUndefined();
+    expect(steps.cam.handoff).toBeUndefined();
+  });
+
+  it('leaves a border showing in the new layout as it is when the line changes hands', () => {
+    const fromCameraStandby = stateOf(
+      { '[Layout] Person 1': { mainBorder: false, camBorder: true, infoBorder: false } },
+      collapsed,
+    );
+    const steps = bySource(planLayoutMoves(standby, '16:9', fromCameraStandby));
+
+    expect(steps.mainBorder.handoff).toEqual({ sceneItemId: 1, visible: true });
+    expect(steps.camBorder).toMatchObject({ visible: true });
+    expect(steps.camBorder.handoff).toBeUndefined();
+    expect(steps.infoBorder.handoff).toBeUndefined();
+  });
+
+  it('hands nothing off outside standby, or without a main border to take the line', () => {
+    const fromCamera = stateOf(
+      { '[Layout] Person 1': { mainBorder: false, camBorder: true } },
+      { mainBorder: 1, camBorder: 402 },
+    );
+    const noCameraBorder: ScenesConfig = {
+      ...standby,
+      participants: {
+        '[Layout] Person 1': {
+          sources: { contentMain: { source: 'main', border: 'mainBorder' }, camera: { source: 'cam' } },
+        },
+      },
+    };
+    const fromSoon = stateOf({ '[Layout] Person 1': { mainBorder: true } }, collapsed);
+
+    expect(planLayoutMoves(standby, '16:9', fromCamera).some((step) => step.handoff)).toBe(false);
+    expect(planLayoutMoves(noCameraBorder, 'camera', fromSoon).some((step) => step.handoff)).toBe(false);
+    expect(planLayoutMoves(standby, 'camera', stateOf({}, collapsed)).some((step) => step.handoff)).toBe(false);
+  });
+
+  it('rejects a standby scene without standby settings', () => {
+    expect(() => planLayoutMoves({ ...standby, standby: undefined }, 'soon')).toThrow(
+      'Scene "soon" is a standby scene, but the layout config has no standby settings',
+    );
   });
 });

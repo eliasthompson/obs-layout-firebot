@@ -81,6 +81,91 @@ describe('findConfigProblems', () => {
     expect(findConfigProblems(config, { ...inventory, inputKinds: {} })).toEqual([]);
   });
 
+  describe('standby', () => {
+    const region = { x: 0, y: 0, width: 10, height: 10 };
+    const standby: ScenesConfig = {
+      ...config,
+      options: { regionBorder: 15 },
+      borderPadding: 9,
+      standby: { textScene: 'Text', lineHeight: 540 },
+      scenes: {
+        ...config.scenes,
+        soon: {
+          participants: [{ layout: 'P1' }],
+          standby: { text: { source: 'Soon', region }, widgets: [{ source: 'Clips', region }] },
+        },
+      },
+    };
+    const standbyInventory: ObsInventory = {
+      ...inventory,
+      sceneItems: { ...inventory.sceneItems, Program: ['Text', 'Clips', 'P1'], Text: ['Soon'] },
+      filters: {
+        ...inventory.filters,
+        Program: ['Move: P1', 'Move: Clips'],
+        Text: ['Move: Soon'],
+        Clips: ['Opacity', 'Move: Opacity'],
+      },
+    };
+
+    const withoutScene = (scene: string) =>
+      Object.fromEntries(Object.entries(standbyInventory.sceneItems).filter(([name]) => name !== scene));
+
+    it('finds nothing wrong with a complete installation, where text needs no fade filters', () => {
+      expect(findConfigProblems(standby, standbyInventory)).toEqual([]);
+    });
+
+    it('needs the standby settings and border rings for the line', () => {
+      expect(messages(findConfigProblems({ ...standby, standby: undefined }, standbyInventory))).toEqual([
+        'scenes use standby, but the config has no standby settings (textScene, lineHeight)',
+      ]);
+      expect(
+        messages(findConfigProblems({ ...standby, options: {}, borderPadding: undefined }, standbyInventory)),
+      ).toEqual([
+        'the standby line is two border rings wide, so options.regionBorder (0) must be larger than borderPadding (0)',
+      ]);
+    });
+
+    it('reports a missing text scene, one outside the container, and one above the layouts', () => {
+      expect(messages(findConfigProblems(standby, { ...standbyInventory, sceneItems: withoutScene('Text') }))).toEqual([
+        'standby text scene "Text" does not exist in OBS',
+      ]);
+      expect(
+        messages(
+          findConfigProblems(standby, {
+            ...standbyInventory,
+            sceneItems: { ...standbyInventory.sceneItems, Program: ['Clips', 'P1'] },
+          }),
+        ),
+      ).toEqual(['standby text scene "Text" is not an item of the container "Program"']);
+      expect(
+        findConfigProblems(standby, {
+          ...standbyInventory,
+          sceneItems: { ...standbyInventory.sceneItems, Program: ['P1', 'Clips', 'Text'] },
+        }),
+      ).toEqual([
+        {
+          severity: 'warning',
+          message:
+            'standby text scene "Text" sits above "P1" in "Program"; move it below so the line covers the text as it slides out',
+        },
+      ]);
+    });
+
+    it('reports standby items missing from their scenes, and skips the text scene check without a container', () => {
+      expect(
+        messages(
+          findConfigProblems(standby, {
+            ...standbyInventory,
+            sceneItems: { ...standbyInventory.sceneItems, Program: ['Text', 'P1'], Text: [] },
+          }),
+        ),
+      ).toEqual(['"Text" has no item "Soon" (standby text)', '"Program" has no item "Clips" (standby widget)']);
+      expect(
+        messages(findConfigProblems(standby, { ...standbyInventory, sceneItems: withoutScene('Program') })),
+      ).toEqual(['container scene "Program" does not exist in OBS']);
+    });
+  });
+
   it('checks scene entries for empty participant lists and unknown layouts', () => {
     const scenes = { empty: { participants: [] }, ghost: { participants: [{ layout: 'P2' }] } };
 

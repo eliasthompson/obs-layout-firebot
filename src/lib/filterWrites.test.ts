@@ -19,6 +19,7 @@ const border: MoveStep = {
   size: { width: 1452, height: 822 },
   visible: true,
   duration: 300,
+  delay: 0,
 };
 const layout: MoveStep = {
   scene: '[Scene] Content',
@@ -29,6 +30,7 @@ const layout: MoveStep = {
   size: undefined,
   visible: false,
   duration: 300,
+  delay: 0,
 };
 
 describe('filterWrites', () => {
@@ -42,17 +44,37 @@ describe('filterWrites', () => {
       {
         sourceName: '[Border] Camera 1',
         filterName: 'Move: Width',
-        filterSettings: intSettingFilterSettings('width', 1452, 300),
+        filterSettings: intSettingFilterSettings('width', 1452, 300, 0),
       },
       {
         sourceName: '[Border] Camera 1',
         filterName: 'Move: Height',
-        filterSettings: intSettingFilterSettings('height', 822, 300),
+        filterSettings: intSettingFilterSettings('height', 822, 300, 0),
       },
       {
         sourceName: '[Border] Camera 1',
         filterName: 'Move: Opacity',
         filterSettings: opacityMoveFilterSettings(border),
+      },
+    ]);
+  });
+
+  it('writes only the move for standby text, which never fades', () => {
+    const text: MoveStep = {
+      ...border,
+      scene: '[Widget] Standby Text',
+      source: '[Text] Starting Soon',
+      kind: 'text',
+      filterName: 'Move: [Text] Starting Soon',
+      size: undefined,
+      delay: 300,
+    };
+
+    expect(filterWrites(text)).toEqual([
+      {
+        sourceName: '[Widget] Standby Text',
+        filterName: 'Move: [Text] Starting Soon',
+        filterSettings: moveFilterSettings(text, { x: 225, y: 120, width: 1470, height: 840 }),
       },
     ]);
   });
