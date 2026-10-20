@@ -29,7 +29,9 @@ The script runs inside Firebot. When a preset calls it with a scene key, it:
    starts from standby, and
 5. sends one request batch, executed in sync with OBS's video frames, that writes and enables a set of Move
    Transition filters. Moves that belong after others wait through the filters' own start delay, so the whole
-   transition is still one batch, and the next preset cuts it short at any point.
+   transition is still one batch, and the next preset cuts it short at any point. When program shows another scene,
+   the batch ends by switching program to the container, so its scene transition starts with the moves. When the
+   container is already on program, no scene transition runs, and preview stays yours for other work.
 
 The filters do the animating:
 

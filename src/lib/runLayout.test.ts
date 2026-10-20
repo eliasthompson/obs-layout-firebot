@@ -15,9 +15,10 @@ const config: ScenesConfig = {
 };
 const connection = { url: 'ws://obs:4455', password: '' };
 
+/** A client whose program shows the container unless a test says otherwise. */
 const fakeConnect = (results: ObsBatchResult[]) => {
   const client: ObsClient = {
-    call: vi.fn(),
+    call: vi.fn(() => Promise.resolve({ currentProgramSceneName: 'C' })),
     callBatch: vi.fn(() => Promise.resolve(results)),
     close: vi.fn(),
   };
@@ -42,6 +43,23 @@ describe('runLayout', () => {
     expect(client.callBatch).toHaveBeenCalledWith(requests, 1);
     expect(client.close).toHaveBeenCalledOnce();
     expect(summary).toEqual({ steps, requests, results, failed: [], durationMs: 47 });
+  });
+
+  it('ends the batch by switching to the container only when program shows another scene or cannot be read', async () => {
+    const switchToContainer = { requestType: 'SetCurrentProgramScene', requestData: { sceneName: 'C' } };
+    const moves = buildMoveRequests(planLayoutMoves(config, 'only'));
+    const elsewhere = fakeConnect([]);
+    vi.mocked(elsewhere.client.call).mockResolvedValueOnce({ currentProgramSceneName: 'Gameplay' });
+    const unknown = fakeConnect([]);
+    vi.mocked(unknown.client.call).mockResolvedValueOnce({});
+    const unreachable = fakeConnect([]);
+    vi.mocked(unreachable.client.call).mockRejectedValueOnce(new Error('no'));
+
+    for (const { connect } of [elsewhere, unknown, unreachable]) {
+      const summary = await runLayout({ config, sceneKey: 'only', connection, connect });
+      expect(summary.requests).toEqual([...moves, switchToContainer]);
+    }
+    expect(elsewhere.client.call).toHaveBeenCalledWith('GetCurrentProgramScene');
   });
 
   it('reports failed requests', async () => {
