@@ -50,7 +50,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@eliasthompson/obs-layout-generator": "^2.0.0",
+    "@eliasthompson/obs-layout-generator": "^2.1.0",
     "jiti": "^2.7.0",
     "uuid": "^14.0.3"
   },

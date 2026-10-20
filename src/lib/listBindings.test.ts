@@ -11,8 +11,9 @@ const config: ScenesConfig = {
       sources: {
         contentMain: { source: '[Group] Content 1', border: '[Border] Content 1' },
         camera: { source: '[Group] Camera 1' },
-        info: { source: '[Group] Info 1', boundsAlignment: 'top center' },
+        info: { source: '[Group] Info 1' },
       },
+      regions: { info: { boundsAlignment: 'top center' } },
     },
     '[Layout] Person 2': { sources: {} },
   },
@@ -40,7 +41,7 @@ describe('listBindings', () => {
       scenes: {
         soon: {
           participants: [],
-          standby: { text: { source: 'Soon', region }, widgets: [{ source: 'Clips', region }] },
+          standby: { text: 'Soon', widgets: [{ source: 'Clips', region }] },
         },
       },
     };
@@ -48,6 +49,22 @@ describe('listBindings', () => {
     expect(listBindings(withStandby)).toEqual([
       { scene: 'Standby Text', source: 'Soon', kind: 'text', boundsAlignment: 1 },
       { scene: '[Scene] Content', source: 'Clips', kind: 'widget' },
+    ]);
+  });
+
+  it("takes the bounds alignment from the config's regions under the participant's own", () => {
+    const withRegions: ScenesConfig = {
+      ...config,
+      regions: { camera: { boundsAlignment: 'bottom right' }, info: { boundsAlignment: 'center' } },
+    };
+
+    expect(listBindings(withRegions).map(({ source, boundsAlignment }) => [source, boundsAlignment])).toEqual([
+      ['[Layout] Person 1', undefined],
+      ['[Group] Content 1', undefined],
+      ['[Border] Content 1', undefined],
+      ['[Group] Camera 1', 10],
+      ['[Group] Info 1', 4],
+      ['[Layout] Person 2', undefined],
     ]);
   });
 

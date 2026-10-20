@@ -6,8 +6,8 @@ import { OBS_ALIGNMENT_FLAGS, STANDBY_TEXT_ALIGNMENT } from '@/constants/obsAlig
 
 export interface Overlay {
   binding: Binding & { kind: 'text' | 'widget' };
-  /** Where the item sits while shown, from the first scene that uses it. */
-  region: Rect;
+  /** Where a widget sits while shown, from the first scene that uses it. A text is placed from its rendered size. */
+  region?: Rect;
 }
 
 /**
@@ -19,7 +19,7 @@ export const listOverlays = (config: ScenesConfig): Overlay[] => {
   const add = (
     scene: string,
     kind: Overlay['binding']['kind'],
-    { source, region, boundsAlignment }: OverlayBinding,
+    { source, region, boundsAlignment }: Partial<OverlayBinding> & Pick<OverlayBinding, 'source'>,
   ) => {
     if (overlays.has(source)) return;
     overlays.set(source, {
@@ -29,13 +29,13 @@ export const listOverlays = (config: ScenesConfig): Overlay[] => {
         kind,
         ...(boundsAlignment ? { boundsAlignment: OBS_ALIGNMENT_FLAGS[boundsAlignment] } : {}),
       },
-      region,
+      ...(region ? { region } : {}),
     });
   };
 
   for (const { standby } of Object.values(config.scenes)) {
     if (standby?.text && config.standby) {
-      add(config.standby.textScene, 'text', { ...standby.text, boundsAlignment: STANDBY_TEXT_ALIGNMENT });
+      add(config.standby.textScene, 'text', { source: standby.text, boundsAlignment: STANDBY_TEXT_ALIGNMENT });
     }
     for (const widget of standby?.widgets ?? []) add(config.container, 'widget', widget);
   }

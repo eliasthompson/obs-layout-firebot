@@ -1,7 +1,7 @@
 import { LAYOUT_OPTIONS_DEFAULT } from '@eliasthompson/obs-layout-generator';
 
 import type { ConfigProblem, ObsInventory } from '@/types/ObsInventory';
-import type { ScenesConfig } from '@/types/ScenesConfig';
+import type { LayoutRegionName, ScenesConfig } from '@/types/ScenesConfig';
 
 import {
   COLOR_MOVE_FILTER_NAME,
@@ -14,6 +14,8 @@ import { listBindings } from '@/lib/listBindings';
 import { listOverlays } from '@/lib/listOverlays';
 import { moveFilterName } from '@/lib/moveFilterName';
 import { resolveBorderColor } from '@/lib/resolveBorderColor';
+import { resolveRegionSettings } from '@/lib/resolveRegionSettings';
+import { sizesFont } from '@/lib/sizesFont';
 
 const SETUP_HINT = 'run `obs-layout-firebot obs:deploy`';
 
@@ -47,8 +49,9 @@ export const findConfigProblems = (config: ScenesConfig, inventory: ObsInventory
         if (!hasItem(layout, source)) error(`"${layout}" has no item "${source}" (${region})`);
       }
       const kind = inputKind(binding.source);
-      if (binding.fontScale !== undefined && kind !== undefined && !kind.startsWith('text_')) {
-        warning(`"${binding.source}" (${region}) has a fontScale but is a ${kind}, not a text source`);
+      const settings = resolveRegionSettings(config, entry, region as LayoutRegionName);
+      if (sizesFont(settings) && kind !== undefined && !kind.startsWith('text_')) {
+        warning(`"${binding.source}" (${region}) has font sizes but is a ${kind}, not a text source`);
       }
     }
   }
@@ -125,10 +128,24 @@ export const findConfigProblems = (config: ScenesConfig, inventory: ObsInventory
   });
   if (missingFilters.length) error(`missing filters, ${SETUP_HINT}: ${missingFilters.join(', ')}`);
 
+  const modifierNames = Object.keys(config.modifiers ?? {});
+  for (const [name, modifier] of Object.entries(config.modifiers ?? {})) {
+    for (const layout of modifier.participants ?? []) {
+      if (!(layout in config.participants)) error(`modifier "${name}" names unknown participant "${layout}"`);
+    }
+  }
+
   for (const [sceneKey, scene] of Object.entries(config.scenes)) {
-    if (!scene.participants.length) warning(`scene "${sceneKey}" shows no participants`);
-    for (const { layout } of scene.participants) {
+    // A standby scene without participants collapses everyone; a layout scene has to show someone
+    if (!scene.standby && !scene.participants?.length) error(`scene "${sceneKey}" shows no participants`);
+    for (const { layout } of scene.participants ?? []) {
       if (!(layout in config.participants)) error(`scene "${sceneKey}" uses unknown participant "${layout}"`);
+    }
+    if (scene.standby?.line !== undefined && !(scene.standby.line in config.participants)) {
+      error(`scene "${sceneKey}" puts unknown participant "${scene.standby.line}" on the standby line`);
+    }
+    for (const name of Object.keys(scene.modifiers ?? {})) {
+      if (!modifierNames.includes(name)) error(`scene "${sceneKey}" forces unknown modifier "${name}"`);
     }
   }
 

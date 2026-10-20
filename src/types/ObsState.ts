@@ -15,4 +15,6 @@ export interface ObsState {
   sceneItems: Record<string, ObsSceneItem[]>;
   /** The width each border's `Move: Width` filter last moved it to, by border source name. */
   borderWidths: Record<string, number>;
+  /** The current font size of every text source whose font is sized to its region, by source name. */
+  fontSizes: Record<string, number>;
 }

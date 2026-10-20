@@ -27,6 +27,18 @@ const fakeConnect = (results: ObsBatchResult[]) => {
 };
 
 describe('runLayout', () => {
+  it('plans with the modifiers switched on', async () => {
+    const keyed: ScenesConfig = {
+      ...config,
+      participants: { L: { sources: { camera: { source: 'cam', border: 'edge' } } } },
+      modifiers: { Keyed: { config: { camera: { isGreenScreen: true } } } },
+    };
+    const { connect } = fakeConnect([]);
+    const summary = await runLayout({ config: keyed, sceneKey: 'only', modifiers: ['Keyed'], connection, connect });
+
+    expect(summary.steps.find((step) => step.source === 'edge')?.visible).toBe(false);
+  });
+
   it('connects, sends the batch frame-synced, and closes', async () => {
     const steps = planLayoutMoves(config, 'only');
     const requests = buildMoveRequests(steps);
@@ -99,6 +111,7 @@ describe('runLayout', () => {
       planLayoutMoves(standby, 'only', {
         sceneItems: { C: [{ sourceName: 'L', sceneItemId: 1, sceneItemEnabled: false }] },
         borderWidths: {},
+        fontSizes: {},
       }),
     );
     expect(client.callBatch).toHaveBeenLastCalledWith(summary.requests, 1);

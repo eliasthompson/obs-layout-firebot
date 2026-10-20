@@ -25,7 +25,7 @@ export interface MoveStep extends Binding {
   region: Rect | undefined;
   /** Border only: target width and height of the color source itself. */
   size: SourceSize | undefined;
-  /** Text sources with a `fontScale`: the font size to set for the target height. */
+  /** Text sources sized to their region: the font size to set for the target height. */
   fontSize?: number;
   visible: boolean;
   duration: number;

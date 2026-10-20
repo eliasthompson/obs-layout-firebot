@@ -11,8 +11,9 @@ const config: ScenesConfig = {
     P1: {
       sources: {
         camera: { source: 'Cam', border: 'CamBorder' },
-        name: { source: 'Name', fontScale: 0.45 },
+        name: { source: 'Name' },
       },
+      regions: { name: { fontSizeMax: 48 } },
     },
   },
   scenes: { solo: { participants: [{ layout: 'P1' }] } },
@@ -101,9 +102,18 @@ describe('findConfigProblems', () => {
     });
   });
 
-  it('warns about a font scale on a source that is not text, and says nothing when the kind is unknown', () => {
+  it('warns about font sizes on a source that is not text, and says nothing when the kind is unknown', () => {
     expect(findConfigProblems(config, { ...inventory, inputKinds: { Name: 'browser_source' } })).toEqual([
-      { severity: 'warning', message: '"Name" (name) has a fontScale but is a browser_source, not a text source' },
+      { severity: 'warning', message: '"Name" (name) has font sizes but is a browser_source, not a text source' },
+    ]);
+    // Font sizes from the config's regions count too
+    expect(
+      findConfigProblems(
+        { ...config, regions: { camera: { fontSizeMin: 10 } } },
+        { ...inventory, inputKinds: { Cam: 'dshow_input' } },
+      ),
+    ).toEqual([
+      { severity: 'warning', message: '"Cam" (camera) has font sizes but is a dshow_input, not a text source' },
     ]);
     expect(findConfigProblems(config, { ...inventory, inputKinds: {} })).toEqual([]);
   });
@@ -119,7 +129,7 @@ describe('findConfigProblems', () => {
         ...config.scenes,
         soon: {
           participants: [{ layout: 'P1' }],
-          standby: { text: { source: 'Soon', region }, widgets: [{ source: 'Clips', region }] },
+          standby: { text: 'Soon', widgets: [{ source: 'Clips', region }] },
         },
       },
     };
@@ -195,8 +205,28 @@ describe('findConfigProblems', () => {
     const scenes = { empty: { participants: [] }, ghost: { participants: [{ layout: 'P2' }] } };
 
     expect(findConfigProblems({ ...config, scenes }, inventory)).toEqual([
-      { severity: 'warning', message: 'scene "empty" shows no participants' },
+      { severity: 'error', message: 'scene "empty" shows no participants' },
       { severity: 'error', message: 'scene "ghost" uses unknown participant "P2"' },
+    ]);
+  });
+
+  it('checks modifiers, the modifiers scenes force, and the participant on the standby line', () => {
+    const withModifiers: ScenesConfig = {
+      ...config,
+      options: { regionBorder: 6 },
+      standby: { textScene: 'Text', lineHeight: 540 },
+      modifiers: { Keyed: { config: {}, participants: ['P1', 'P9'] }, Names: { config: {} } },
+      scenes: {
+        solo: { participants: [{ layout: 'P1' }], modifiers: { Keyed: true, Ghost: false } },
+        soon: { standby: { line: 'P8' } },
+      },
+    };
+    const withText = { ...inventory, sceneItems: { ...inventory.sceneItems, Program: ['Text', 'P1'], Text: [] } };
+
+    expect(messages(findConfigProblems(withModifiers, withText))).toEqual([
+      'modifier "Keyed" names unknown participant "P9"',
+      'scene "solo" forces unknown modifier "Ghost"',
+      'scene "soon" puts unknown participant "P8" on the standby line',
     ]);
   });
 });

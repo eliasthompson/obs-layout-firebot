@@ -90,10 +90,11 @@ every machine makes the same presets and there is nothing else to keep. Keep the
   settings from the profile's `integrations.json`, so there is nothing else to configure.
 - **Run Custom Scripts** (Settings, Scripts) and **Persist Custom Variables** (Settings, Advanced) must be on;
   `firebot:restart` turns both on for you. Without the second, the config is gone after a restart.
-- Preset effect lists: one per scene key, each a **Run Custom Script** effect running `obs-layout.js` with the
-  `sceneKey` parameter set to the key. Their ids derive from the config variable and the scene key, so a Stream Deck
-  button or command that runs one keeps working across deploys and machines. `firebot:restart` installs them into the
-  profile, and `firebot:deploy` runs it when they are missing or out of date.
+- Preset effect lists: one per scene key, and an on, an off, and a reset for the modifiers, each a **Run Custom
+  Script** effect running `obs-layout.js` with the scene key or modifier as its parameters. Their ids derive from the
+  config variable and the action, so a Stream Deck button or command that runs one keeps working across deploys and
+  machines. `firebot:restart` installs them into the profile, and `firebot:deploy` runs it when they are missing or
+  out of date.
 
 Firebot's HTTP API cannot create preset lists, and Firebot caches a custom script once loaded, so both the presets
 and a new build need a Firebot restart to take effect.
@@ -119,13 +120,22 @@ export default {
   // borderColor: { filter: 'Stroke', duration: 500 },
   // Move duration in milliseconds
   duration: 300,
-  // Every layout scene, with the OBS item (and border) that fills each region
+  // The layout config every participant starts from, under their pool config and the scene's; see Layers and modifiers
+  config: { camera: { mainAspectRatio: '4:3' } },
+  // How every participant's sources sit in their regions, under each participant's own regions and the scenes'
+  regions: {
+    info: { inset: 12, boundsAlignment: 'top center' },
+    name: { inset: 12, fontSizeMin: 24, fontSizeMax: 48 },
+  },
+  // Every layout scene, with the OBS item (and border) that fills each region, and what is true of that participant
+  // in every composition
   participants: {
     '[Layout] Person 1': {
       sources: {
         contentMain: { source: '[Group] Content 1', border: '[Border] Content 1' },
+        info: { source: '[Widget] Info 1', border: '[Border] Info 1' },
         camera: { source: '[Group] Camera 1', border: '[Border] Camera 1' },
-        name: { source: '[Text] Name 1', inset: 12, fontScale: 0.45, fontSizeMin: 24, fontSizeMax: 48 },
+        name: { source: '[Text] Name 1' },
       },
     },
     '[Layout] Person 2': {
@@ -133,13 +143,17 @@ export default {
         contentMain: { source: '[Group] Content 2', border: '[Border] Content 2' },
         camera: { source: '[Group] Camera 2', border: '[Border] Camera 2' },
       },
+      // A guest who always streams keyed
+      config: { camera: { isGreenScreen: true } },
     },
   },
-  // One preset per scene key: the participants it shows, in layout order, each with an optional layout config
+  // One preset per scene key: the participants it shows, in layout order, each with what the composition changes
   scenes: {
     '[Scene] 16:9 1P': { participants: [{ layout: '[Layout] Person 1' }] },
     '[Scene] Camera 1P': {
       participants: [{ layout: '[Layout] Person 1', config: { contentMain: null } }],
+      // A camera on its own needs no timer strip, whatever is switched on
+      modifiers: { Timer: false },
     },
     '[Scene] 4:3 2P': {
       participants: [
@@ -147,50 +161,65 @@ export default {
         { layout: '[Layout] Person 2', config: { contentMain: { aspectRatio: '4:3' } } },
       ],
       duration: 500,
+      modifiers: { Names: true },
     },
-    // A green screen camera: no border, spreading over the gaps around it; its border source fades out
-    '[Scene] Green Screen 1P': {
-      participants: [{ layout: '[Layout] Person 1', config: { camera: { isGreenScreen: true } } }],
-    },
-    // A standby screen: the regions collapse into a line at the canvas center and the text slides out from behind it
-    '[Standby] Starting Soon': {
-      participants: [{ layout: '[Layout] Person 1' }],
-      standby: { text: { source: '[Text] Starting Soon', region: { x: 1000, y: 480, width: 700, height: 120 } } },
-    },
+    // Standby screens: every participant collapses into a line at the canvas center and the text slides out from
+    // behind it; `line` names whose main border is the line, the first participant when left out
+    '[Standby] Starting Soon': { standby: { text: '[Text] Starting Soon' } },
+    '[Standby] Be Right Back': { standby: { text: '[Text] Be Right Back', line: '[Layout] Person 2' } },
   },
-  // The scene in the container that holds the standby texts, and the height of the standby line
-  standby: { textScene: '[Widget] Standby Text', lineHeight: 540 },
+  // Layout configs that presets switch on and off over any scene: an "<name> On" and "<name> Off" preset each, plus
+  // "Reset Modifiers"; see Layers and modifiers
+  modifiers: {
+    // A green screen camera: no border, spreading over the gaps around it; its border source fades out
+    Keyed: { config: { camera: { isGreenScreen: true } }, participants: ['[Layout] Person 1'] },
+    // A region config switches the region on, so the strip's whole shape lives here
+    Timer: { config: { info: { aspectRatio: '250:49', isMainAttached: true } } },
+    Names: { config: { hasName: true } },
+  },
+  // The scene in the container that holds the standby texts, the height of the standby line, and how far past the
+  // line a text shows
+  standby: { textScene: '[Widget] Standby Text', lineHeight: 540, textGap: 30 },
   // Optional: where the tools find OBS and Firebot when the defaults do not fit this machine; see Machine settings
   // obs: { sceneCollection: 'Untitled', executable: 'C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe' },
   // firebot: { profile: 'Main', apiUrl: 'http://localhost:7472/api/v1', variable: 'layoutScenes' },
 } satisfies ScenesConfig;
 ```
 
-| Field           | Meaning                                                                                                       |
-| --------------- | ------------------------------------------------------------------------------------------------------------- |
-| `container`     | OBS scene whose items are the participant layout scenes.                                                      |
-| `options`       | `LayoutOptions` for the canvas, as in obs-layout-generator.                                                   |
-| `borderPadding` | Pixels the border sources' filters add outside the border on every side. Default `0`.                         |
-| `borderColor`   | The filter on each border that carries its color, for recoloring; see [Border colors](#border-colors).        |
-| `duration`      | Move duration in milliseconds. Default `300`.                                                                 |
-| `participants`  | Every layout scene the installation knows, keyed by scene name, with the source (and border) for each region. |
-| `scenes`        | Compositions by scene key: the participants shown, in layout order, each with an optional `LayoutConfig`.     |
-| `standby`       | Needed by standby scenes: `textScene` and `lineHeight`; see [Standby screens](#standby-screens).              |
-| `obs`           | Optional. `url` and `password` are used over Firebot's OBS integration settings; see [Machine settings].      |
-| `firebot`       | Optional. Where the tools find Firebot; see [Machine settings].                                               |
+| Field           | Meaning                                                                                                                                                                |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `container`     | OBS scene whose items are the participant layout scenes.                                                                                                               |
+| `options`       | `LayoutOptions` for the canvas, as in obs-layout-generator.                                                                                                            |
+| `borderPadding` | Pixels the border sources' filters add outside the border on every side. Default `0`.                                                                                  |
+| `borderColor`   | The filter on each border that carries its color, for recoloring; see [Border colors](#border-colors).                                                                 |
+| `duration`      | Move duration in milliseconds. Default `300`.                                                                                                                          |
+| `config`        | The `LayoutConfig` every participant starts from; see [Layers and modifiers](#layers-and-modifiers).                                                                   |
+| `regions`       | Region settings every participant starts from: `inset`, `boundsAlignment`, `fontSizeMax`, `fontSizeMin` per region; see [Layers and modifiers](#layers-and-modifiers). |
+| `participants`  | Every layout scene the installation knows, keyed by scene name, with the source (and border) for each region and the participant's own `config` and `regions`.         |
+| `scenes`        | Compositions by scene key: the participants shown, in layout order, each with the `config` the composition changes, and the modifiers the scene forces.                |
+| `modifiers`     | `LayoutConfig`s presets switch on and off over any scene; see [Layers and modifiers](#layers-and-modifiers).                                                           |
+| `standby`       | Needed by standby scenes: `textScene`, `lineHeight`, `textGap`; see [Standby screens](#standby-screens).                                                               |
+| `obs`           | Optional. `url` and `password` are used over Firebot's OBS integration settings; see [Machine settings].                                                               |
+| `firebot`       | Optional. Where the tools find Firebot; see [Machine settings].                                                                                                        |
 
 A scene entry may carry its own `options` and `duration`, and a `standby` entry that makes it a standby screen.
 Region names are those of `LayoutMetric`: `contentMain`,
-`camera`, `contentAux`, `info`, `name`. Each bound source takes a `source`, an optional `border`, an optional
+`camera`, `contentAux`, `info`, `name`. Each bound source takes a `source` and an optional `border`, the OBS items.
+How a source sits in its region is set per region in `regions`: on the config for every participant, on a pool entry
+for that participant, and on a scene's participant entry for that composition, each over the last. A region takes an
+optional
 `inset` (pixels the source sits inside its region on every side, as padding within the border, for text or widgets
 that should not touch the frame; a ratio declared for an inset region holds for the area inside the inset, so a
 `250:49` info strip with a 12 px inset shows 366x72 of content inside a 390x96 region), an optional `boundsAlignment`
 (where the source sits inside its bounds when it does not fill them, named as in OBS's transform dialog, such as
-`top center`), which `obs:deploy` applies, and for text sources an optional `fontScale`: the font size as a fraction of the
-source's height after the inset, set on every move so the text grows with its region. The font stays at `fontSizeMax`
-while the text fits and sizes down to `fontSizeMin` when the region is too short; `0.45` reproduces a 48 px font in a
-106 px name strip. When a name binding has `fontSizeMin`, the layout is asked for a name at least
-`inset × 2 + fontSizeMin` tall unless the options already set `nameHeightMin`.
+`top center`), which `obs:deploy` applies, and for text sources an optional `fontSizeMax` and `fontSizeMin`. With
+either set, the font is set on every move to the largest size whose line fits the source's height after the inset:
+it stays at `fontSizeMax` while that fits and sizes down to `fontSizeMin` when the region is too short. How tall a
+line renders per pixel of font size is measured from the source itself, its rendered height at its current font size,
+so no ratio is configured; a source that renders nothing yet, such as an empty text, is sized as if a line were a
+quarter taller than its font. The item's bounds must not scale the text up, or the font size changes nothing on
+screen. When a name region has `fontSizeMin`, the layout is asked for a name at least `inset × 2 + fontSizeMin` tall
+unless the options already set `nameHeightMin`.
 
 A participant's `config` is a `LayoutConfig` as obs-layout-generator 2 takes it: `contentMain`, `camera`, `contentAux`,
 and `info` each take a region config such as `{ aspectRatio: '4:3' }` or `null` to turn the region off, and `hasName`
@@ -202,6 +231,32 @@ next layout that frames the camera.
 
 The config is stored in a Firebot variable as JSON, so it has to stay plain data: no functions, dates, or class
 instances. A `.js` or `.json` file works too; pass it with `--config`.
+
+### Layers and modifiers
+
+A shown participant's layout config is built up in layers, each merged over the last region by region, so a layer
+can change one field of a region without restating the rest, and `null` on any layer turns a region off:
+
+1. the config's `config`: what every participant starts from, such as the camera's ratio when it takes the main
+   column;
+2. the participant's pool `config`: what is true of them in every composition, such as a guest who always streams
+   keyed;
+3. the scene's `config` for them: what the composition changes, such as the content shape;
+4. every modifier in effect, in the order `modifiers` lists them.
+
+Region settings layer the same way, field by field per region: the config's `regions`, then the pool entry's, then
+the scene participant's. The bounds alignment is the exception: `obs:deploy` sets it on the item once, so it layers
+over the config and the pool entry only.
+
+Modifiers are the switches: named layout configs that presets switch on and off at runtime, over whatever scene is
+up. A region config in any layer switches the region on, so a region that only a modifier should show, such as a
+timer strip, is described in the modifier alone. Switched-on modifiers stay on across scene changes, so a scene preset applies its scene with them, and a scene
+can force one on or off with its `modifiers` (`{ Timer: false }`), whatever is switched on. A modifier applies to
+every shown participant unless it names `participants`. The script keeps the active scene and modifiers in the
+Firebot variable named after the config variable with `State` added, and `firebot:deploy` makes a preset per scene
+key, an `<name> On` and `<name> Off` preset per modifier, and `Reset Modifiers`. A modifier preset run before any
+scene preset only remembers the modifier. With the example above, eight content shapes with a timer and a keyed
+camera as modifiers make eight scene presets and five modifier presets instead of 32 scenes.
 
 ### Border colors
 
@@ -248,9 +303,8 @@ export default {
   scenes: {
     // ...
     '[Standby] Starting Soon': {
-      participants: [{ layout: '[Layout] Person 1' }],
       standby: {
-        text: { source: '[Text] Starting Soon', region: { x: 1000, y: 480, width: 700, height: 120 } },
+        text: '[Text] Starting Soon',
         widgets: [{ source: '[Widget] Standby Clips', region: { x: 120, y: 300, width: 640, height: 480 } }],
       },
     },
@@ -268,16 +322,17 @@ The transition runs in stages, each one `duration` long:
 
 - **The line.** Content collapses to no width at the canvas center, which leaves each border's color source two
   borders wide (`regionBorder` per side), `lineHeight` tall. With an inner stroke at least a border wide, the line is
-  solid stroke. All borders collapse onto it, but only the first participant's main border stays
-  shown (the region obs-layout-generator puts in the main column: main content, else camera, else aux content, else
-  info), so their shadows do not stack. Leaving standby for a layout whose main region is another one, that border
-  takes over the line in a single frame before the regions grow out.
+  solid stroke. Every participant collapses onto it unless the scene lists `participants`, and only the `line`
+  participant's main border stays shown (the first participant when left out; the main region is the one
+  obs-layout-generator puts in the main column: main content, else camera, else aux content, else info), so their
+  shadows do not stack. Leaving standby for a layout whose main region is another one, that border takes over the
+  line in a single frame before the regions grow out.
 - **The text** is an item of `textScene`, which `obs:deploy` crops at the canvas center, so text slides out from behind the
-  line without fading. Its region is the bounding box: `obs:deploy` makes every standby text cover it (Scale to outer
-  bounds), aligned center left, so text relatively wider than the box runs past its right edge. Hidden text waits at
-  its region's height just left of the cut, by its rendered width, overflow included. Put `textScene` below the
-  participant layouts in the container, so the line covers the cut. Each screen has its own text source; a scene that
-  replaces another's text slides the old one back first.
+  line without fading. It shows at its rendered size, which the script reads from OBS, centered on the line and
+  `textGap` pixels past it (default 30); until OBS has reported a size, a box the line's proportions suggest stands
+  in. Hidden text waits entirely left of the cut. Put `textScene` below the participant layouts in the container, so
+  the line covers the cut. Each screen has its own text source; a scene that replaces another's text slides the old
+  one back first.
 - **Widgets** are items of the container that fade in and out at their region, for example browser sources that rotate
   their own content.
 - **What it starts from** is read from OBS on every run: which standby items show, and whether the borders were last
@@ -311,14 +366,14 @@ Run as `npx obs-layout-firebot <command>`. Commands are grouped by the program t
 the config takes `--config <path>` (default `config/scenes.ts`); every command that changes something takes
 `--dry-run` to report what it would do instead, and `--yes` to skip its questions.
 
-| Command           | What it does                                                                                                                |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `obs:deploy`      | Sets OBS up for the config, then asks to restart OBS when the item transitions need setting; see below. `--no-restart`.     |
-| `obs:restart`     | Restarts OBS, never forcibly, after checking that it is not streaming or recording.                                         |
-| `obs:verify`      | `obs:verify "<scene key>"`: applies a scene from this machine and compares every item with the plan; exits 1 on a mismatch. |
-| `obs:capture`     | `obs:capture "<scene key>" --save frames/`: screenshots during a transition, or white-pixel counts without it.              |
-| `firebot:deploy`  | Checks, stores, installs the script, and asks to restart for new presets or a new script; see below. `--skip-obs`.          |
-| `firebot:restart` | Restarts Firebot, never forcibly, around installing the presets and turning on the two settings above.                      |
+| Command           | What it does                                                                                                                                                                                                 |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `obs:deploy`      | Sets OBS up for the config, then asks to restart OBS when the item transitions need setting; see below. `--no-restart`.                                                                                      |
+| `obs:restart`     | Restarts OBS, never forcibly, after checking that it is not streaming or recording.                                                                                                                          |
+| `obs:verify`      | `obs:verify "<scene key>"`: applies a scene from this machine and compares every item with the plan; exits 1 on a mismatch. `--modifiers Keyed,Timer` applies it as the script would with those switched on. |
+| `obs:capture`     | `obs:capture "<scene key>" --save frames/`: screenshots during a transition, or white-pixel counts without it. `--modifiers` as above.                                                                       |
+| `firebot:deploy`  | Checks, stores, installs the script, and asks to restart for new presets or a new script; see below. `--skip-obs`.                                                                                           |
+| `firebot:restart` | Restarts Firebot, never forcibly, around installing the presets and turning on the two settings above.                                                                                                       |
 
 Version 2 renamed and regrouped the commands; see [Upgrading from 1.x](#upgrading-from-1x).
 
@@ -359,8 +414,8 @@ that is replaced is backed up next to it, with a timestamp.
 2. It stores the config in the `layoutScenes` variable (or `firebot.variable`). The next preset run uses it; nothing
    needs a restart.
 3. It installs the built script into the profile when it differs from the installed one.
-4. It derives one preset per scene key from the config and compares them with the profile's presets and the ones
-   Firebot has loaded.
+4. It derives the presets from the config, one per scene key plus the modifier and reset presets, and compares them
+   with the profile's presets and the ones Firebot has loaded.
 5. When a preset is missing, out of date, or left over from a removed key, or the script changed, it asks whether to
    restart Firebot now (`--no-restart` declines), installs the presets and settings into the profile while Firebot is
    closed, and waits for Firebot to come back with the right presets.
@@ -377,6 +432,20 @@ change the config instead.
 - **Another participant**: build a second layout scene in OBS like the first, add it to `participants`, and list it
   in the scenes that show it. The library splits participants into balanced rows.
 - Then `firebot:deploy`, which adds the preset for the new key and offers the restart.
+
+## Upgrading from 2.x
+
+- **`fontScale`** is gone. A text region with `fontSizeMax` or `fontSizeMin` is sized from how tall it renders at
+  its current font size, read from OBS before every move, so remove the field; the sizes keep their meaning.
+- **Region settings moved off the bindings.** `inset`, `boundsAlignment`, `fontSizeMax`, and `fontSizeMin` live in a
+  `regions` map by region name, on the config, on a pool entry, or on a scene's participant entry, instead of beside
+  the source names.
+- **Standby text** is the source name alone: `text: '[Text] Starting Soon'` instead of a source and region. The text
+  shows at its rendered size, centered on the line, `standby.textGap` past it. A standby scene may also drop its
+  `participants`, which collapses everyone, and name the `line` participant.
+- **Layers and modifiers** are new and optional: a `config` and `regions` on the config, on each pool entry, and on
+  a scene's participant entry, and `modifiers` with their presets. Existing scene presets keep their ids; the
+  modifier presets are added on the first deploy.
 
 ## Upgrading from 1.x
 

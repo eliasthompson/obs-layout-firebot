@@ -1,7 +1,7 @@
 // Applies a scene key straight from this machine, the way the Firebot script does, then reads back every item's
 // position, size, visibility, and opacity and compares them with the plan.
 //
-//   obs-layout-firebot obs:verify "<scene key>" [--config config/scenes.ts]
+//   obs-layout-firebot obs:verify "<scene key>" [--modifiers Keyed,Timer] [--config config/scenes.ts]
 import { parseArgs } from 'node:util';
 
 import type { MoveStep } from '@/types/MoveStep';
@@ -16,15 +16,21 @@ export const obsVerify = async (args: string[]) => {
   const { positionals, values } = parseArgs({
     args,
     allowPositionals: true,
-    options: { config: { type: 'string', default: DEFAULT_CONFIG_PATH } },
+    options: { config: { type: 'string', default: DEFAULT_CONFIG_PATH }, modifiers: { type: 'string' } },
   });
   const [sceneKey = ''] = positionals;
   if (!sceneKey) throw new Error('usage: obs-layout-firebot obs:verify "<scene key>"');
 
   const config = await loadConfig(values.config);
   const connection = toolObsConnection(config);
+  // Modifiers to apply the scene with, as the script would with them switched on
+  const modifiers =
+    values.modifiers
+      ?.split(',')
+      .map((name) => name.trim())
+      .filter(Boolean) ?? [];
 
-  const summary = await runLayout({ config, sceneKey, connection });
+  const summary = await runLayout({ config, sceneKey, modifiers, connection });
   console.log(
     `${String(summary.requests.length)} requests in ${String(summary.durationMs)} ms, ${String(summary.failed.length)} failed`,
   );

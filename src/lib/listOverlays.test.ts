@@ -16,7 +16,7 @@ const config: ScenesConfig = {
     soon: {
       participants: [],
       standby: {
-        text: { source: '[Text] Starting Soon', region: soon },
+        text: '[Text] Starting Soon',
         widgets: [{ source: '[Widget] Clips', region: clips }],
       },
     },
@@ -27,7 +27,7 @@ const config: ScenesConfig = {
     again: {
       participants: [],
       standby: {
-        text: { source: '[Text] Starting Soon', region: clips },
+        text: '[Text] Starting Soon',
         widgets: [{ source: '[Widget] Clips', region: soon }],
       },
     },
@@ -40,7 +40,6 @@ describe('listOverlays', () => {
     expect(listOverlays(config)).toEqual([
       {
         binding: { scene: '[Widget] Standby Text', source: '[Text] Starting Soon', kind: 'text', boundsAlignment: 1 },
-        region: soon,
       },
       { binding: { scene: '[Scene] Canvas', source: '[Widget] Clips', kind: 'widget' }, region: clips },
       {

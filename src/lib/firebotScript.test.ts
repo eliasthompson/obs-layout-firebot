@@ -9,9 +9,10 @@ import { createRun, getDefaultParameters, getScriptManifest } from '@/lib/firebo
 
 const config = {
   container: 'C',
-  participants: { L: { sources: { camera: { source: 'cam' } } } },
+  participants: { L: { sources: { camera: { source: 'cam', border: 'edge' } } } },
   // No main content, so the camera takes the main column and is shown on a default canvas
   scenes: { only: { participants: [{ layout: 'L', config: { contentMain: null } }] } },
+  modifiers: { Keyed: { config: { camera: { isGreenScreen: true } } } },
 };
 const integrations = JSON.stringify({ OBS: { userSettings: { websocketSettings: { port: 4455, password: 'pw' } } } });
 
@@ -27,12 +28,15 @@ const fakeConnect = (results: ((count: number) => ObsBatchResult[]) | ObsBatchRe
   return { client, connect };
 };
 
-const request = (parameters: FirebotRunRequest['parameters'], variable: unknown = config) => {
+const request = (parameters: FirebotRunRequest['parameters'], variable: unknown = config, state?: unknown) => {
   const logs: string[] = [];
   const runRequest: FirebotRunRequest = {
     parameters,
     modules: {
-      customVariableManager: { getCustomVariable: vi.fn(() => variable) },
+      customVariableManager: {
+        getCustomVariable: vi.fn((name: string) => (name.endsWith('State') ? state : variable)),
+        addCustomVariable: vi.fn(),
+      },
       logger: {
         info: (message) => logs.push(`info ${message}`),
         warn: (message) => logs.push(`warn ${message}`),
@@ -61,7 +65,7 @@ describe('getDefaultParameters', () => {
   it('declares the scene key and the config variable, defaulting to layoutScenes', () => {
     const parameters = getDefaultParameters();
 
-    expect(Object.keys(parameters)).toEqual(['sceneKey', 'configVariable']);
+    expect(Object.keys(parameters)).toEqual(['sceneKey', 'configVariable', 'modifier', 'modifierState']);
     expect(parameters.configVariable.default).toBe('layoutScenes');
   });
 });
@@ -77,8 +81,98 @@ describe('createRun', () => {
     expect(connect).toHaveBeenCalledWith({ url: 'ws://localhost:4455', password: 'pw' });
     expect(client.callBatch).toHaveBeenCalledOnce();
     expect(logs).toEqual([
-      expect.stringMatching(/^info OBS Layout: scene "only", 2 items shown, 0 hidden, \d+ requests in \d+ ms\.$/),
+      expect.stringMatching(/^info OBS Layout: scene "only", 3 items shown, 0 hidden, \d+ requests in \d+ ms\.$/),
     ]);
+    expect(runRequest.modules.customVariableManager.addCustomVariable).toHaveBeenCalledWith(
+      'layoutScenesState',
+      { sceneKey: 'only', modifiers: [] },
+      0,
+    );
+  });
+
+  it('switches a modifier on, applies the remembered scene with it, and keeps it for the next scene', async () => {
+    const { connect } = fakeConnect(allOk);
+    const run = createRun({ profileDir: '/profile', connect, readIntegrations: () => integrations });
+    const on = request({ modifier: 'Keyed' }, config, JSON.stringify({ sceneKey: 'only', modifiers: [] }));
+
+    await expect(run(on.runRequest)).resolves.toEqual({ success: true });
+    expect(on.logs[0]).toMatch(/^info OBS Layout: scene "only" with Keyed, 2 items shown, 1 hidden/);
+    expect(on.runRequest.modules.customVariableManager.addCustomVariable).toHaveBeenCalledWith(
+      'layoutScenesState',
+      { sceneKey: 'only', modifiers: ['Keyed'] },
+      0,
+    );
+
+    const next = request({ sceneKey: 'only' }, config, { sceneKey: 'only', modifiers: ['Keyed'] });
+    await expect(run(next.runRequest)).resolves.toEqual({ success: true });
+    expect(next.logs[0]).toMatch(/with Keyed/);
+
+    const off = request({ modifier: 'Keyed', modifierState: 'OFF' }, config, {
+      sceneKey: 'only',
+      modifiers: ['Keyed'],
+    });
+    await expect(run(off.runRequest)).resolves.toEqual({ success: true });
+    expect(off.runRequest.modules.customVariableManager.addCustomVariable).toHaveBeenCalledWith(
+      'layoutScenesState',
+      { sceneKey: 'only', modifiers: [] },
+      0,
+    );
+  });
+
+  it('switches every modifier off with *, and remembers a modifier without a scene to apply yet', async () => {
+    const { connect } = fakeConnect(allOk);
+    const run = createRun({ profileDir: '/profile', connect, readIntegrations: () => integrations });
+    const reset = request({ modifier: '*' }, config, { sceneKey: 'only', modifiers: ['Keyed', 'Ghost'] });
+
+    await expect(run(reset.runRequest)).resolves.toEqual({ success: true });
+    expect(reset.runRequest.modules.customVariableManager.addCustomVariable).toHaveBeenCalledWith(
+      'layoutScenesState',
+      { sceneKey: 'only', modifiers: [] },
+      0,
+    );
+
+    const early = request({ modifier: 'Keyed' }, config, { modifiers: 'not a list' });
+    await expect(run(early.runRequest)).resolves.toEqual({ success: true });
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(early.logs).toEqual(['info OBS Layout: modifiers Keyed; no scene to apply yet.']);
+
+    const nothing = request({ modifier: '*' });
+    await expect(run(nothing.runRequest)).resolves.toEqual({ success: true });
+    expect(nothing.logs).toEqual(['info OBS Layout: modifiers off; no scene to apply yet.']);
+    expect(early.runRequest.modules.customVariableManager.addCustomVariable).toHaveBeenCalledWith(
+      'layoutScenesState',
+      { modifiers: ['Keyed'] },
+      0,
+    );
+  });
+
+  it('switches a modifier on once, drops stray state values, and takes an empty scene key as none', async () => {
+    const { connect } = fakeConnect(allOk);
+    const run = createRun({ profileDir: '/profile', connect, readIntegrations: () => integrations });
+    const again = request({ modifier: 'Keyed' }, config, { sceneKey: '', modifiers: ['Keyed', 7, 'Ghost'] });
+
+    await expect(run(again.runRequest)).resolves.toEqual({ success: true });
+    expect(connect).not.toHaveBeenCalled();
+    expect(again.runRequest.modules.customVariableManager.addCustomVariable).toHaveBeenCalledWith(
+      'layoutScenesState',
+      { modifiers: ['Ghost', 'Keyed'] },
+      0,
+    );
+  });
+
+  it('fails on a modifier the config does not define, before touching OBS', async () => {
+    const { connect } = fakeConnect(allOk);
+    const run = createRun({ profileDir: '/profile', connect, readIntegrations: () => integrations });
+
+    await expect(run(request({ modifier: 'Ghost' }).runRequest)).resolves.toEqual({
+      success: false,
+      errorMessage: 'OBS Layout: no modifier "Ghost" in the layout config.',
+    });
+    await expect(run(request({ modifier: 'Keyed' }, { ...config, modifiers: undefined }).runRequest)).resolves.toEqual({
+      success: false,
+      errorMessage: 'OBS Layout: no modifier "Keyed" in the layout config.',
+    });
+    expect(connect).not.toHaveBeenCalled();
   });
 
   it('reads another variable, accepts JSON text, and uses the config connection over the profile', async () => {
@@ -102,7 +196,7 @@ describe('createRun', () => {
 
     await expect(run(request({ sceneKey: '  ' }).runRequest)).resolves.toEqual({
       success: false,
-      errorMessage: 'OBS Layout: the sceneKey parameter is empty.',
+      errorMessage: 'OBS Layout: the sceneKey and modifier parameters are both empty.',
     });
     await expect(run(request({}).runRequest)).resolves.toMatchObject({ success: false });
     expect(connect).not.toHaveBeenCalled();

@@ -11,6 +11,8 @@ import { readObsState } from '@/lib/readObsState';
 export interface RunLayoutOptions {
   config: ScenesConfig;
   sceneKey: string;
+  /** Names of the modifiers switched on. */
+  modifiers?: readonly string[];
   connection: ObsConnection;
   connect?: ConnectObs;
   now?: () => number;
@@ -43,16 +45,17 @@ const readProgramScene = async (client: ObsClient) => {
 export const runLayout = async ({
   config,
   sceneKey,
+  modifiers = [],
   connection,
   connect = connectObs,
   now = Date.now,
 }: RunLayoutOptions): Promise<RunLayoutSummary> => {
   // Fail on an unknown scene key before connecting
-  planLayoutMoves(config, sceneKey);
+  planLayoutMoves(config, sceneKey, undefined, modifiers);
   const started = now();
   const client = await connect(connection);
   try {
-    const steps = planLayoutMoves(config, sceneKey, await readObsState(client, config));
+    const steps = planLayoutMoves(config, sceneKey, await readObsState(client, config), modifiers);
     const onProgram = (await readProgramScene(client)) === config.container;
     const requests: ObsRequest[] = [
       ...buildMoveRequests(steps),

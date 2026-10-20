@@ -25,6 +25,8 @@ describe('createPresetEffectList', () => {
             parameters: {
               sceneKey: { ...definitions.sceneKey, value: '[Scene] 16:9 1P' },
               configVariable: { ...definitions.configVariable, value: 'layoutScenes' },
+              modifier: { ...definitions.modifier, value: '' },
+              modifierState: { ...definitions.modifierState, value: 'on' },
             },
           },
         ],
@@ -46,6 +48,33 @@ describe('createPresetEffectList', () => {
   });
 });
 
+describe('createPresetEffectList for modifiers', () => {
+  it('builds on, off, and reset presets that run the script with the modifier parameters', () => {
+    const on = createPresetEffectList({ kind: 'modifier', modifier: 'Keyed', enabled: true });
+    const off = createPresetEffectList({ kind: 'modifier', modifier: 'Keyed', enabled: false });
+    const reset = createPresetEffectList({ kind: 'reset' });
+    const values = (preset: typeof on) =>
+      Object.fromEntries(
+        Object.entries(preset.effects.list[0]?.parameters as Record<string, { value: string }>).map(
+          ([name, { value }]) => [name, value],
+        ),
+      );
+
+    expect(on.name).toBe('Keyed On');
+    expect(values(on)).toEqual({
+      sceneKey: '',
+      configVariable: 'layoutScenes',
+      modifier: 'Keyed',
+      modifierState: 'on',
+    });
+    expect(off.name).toBe('Keyed Off');
+    expect(values(off)).toMatchObject({ modifier: 'Keyed', modifierState: 'off' });
+    expect(reset.name).toBe('Reset Modifiers');
+    expect(values(reset)).toMatchObject({ modifier: '*', modifierState: 'on' });
+    expect(new Set([createPresetEffectList('Keyed').id, off.id, on.id, reset.id]).size).toBe(4);
+  });
+});
+
 describe('createPresetEffectLists', () => {
   it("makes one preset per scene key, by id, for the config's variable", () => {
     const config = { container: 'C', participants: {}, scenes: { A: { participants: [] }, B: { participants: [] } } };
@@ -56,5 +85,23 @@ describe('createPresetEffectLists', () => {
     expect(Object.values(createPresetEffectLists({ ...config, firebot: { variable: 'v' } }))[0]).toEqual(
       createPresetEffectList('A', 'v'),
     );
+  });
+
+  it('adds an on and an off preset per modifier, and a reset, after the scenes', () => {
+    const config = {
+      container: 'C',
+      participants: {},
+      scenes: { A: { participants: [] } },
+      modifiers: { Keyed: { config: {} }, Timer: { config: {} } },
+    };
+
+    expect(Object.values(createPresetEffectLists(config)).map((preset) => preset.name)).toEqual([
+      'A',
+      'Keyed On',
+      'Keyed Off',
+      'Timer On',
+      'Timer Off',
+      'Reset Modifiers',
+    ]);
   });
 });

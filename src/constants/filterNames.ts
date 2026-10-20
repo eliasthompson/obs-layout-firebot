@@ -1,5 +1,9 @@
 export const DEFAULT_CONFIG_VARIABLE = 'layoutScenes';
+/** Added to the config variable's name for the variable that keeps the active scene and modifiers. */
+export const STATE_VARIABLE_SUFFIX = 'State';
 export const DEFAULT_DURATION = 300;
+/** Pixels between the standby line and a standby text. */
+export const DEFAULT_STANDBY_TEXT_GAP = 30;
 /** Move Source filters are named `Move: <source>` on the scene that contains the source. */
 export const MOVE_FILTER_PREFIX = 'Move:';
 /** Filters on the toggled sources themselves. Inputs and scenes are global in OBS, so these need no source name. */

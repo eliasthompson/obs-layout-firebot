@@ -2,7 +2,7 @@
 // --save it reports near-white pixel counts per frame (handy for spotting flashes); with --save it writes PNG frames.
 //
 //   obs-layout-firebot obs:capture "<scene key>" [--source "[Scene] Content"] [--save frames/]
-//     [--watch-input "[Border] Camera 1"] [--disable-filters Stroke,Shadow] [--config config/scenes.ts]
+//     [--watch-input "[Border] Camera 1"] [--disable-filters Stroke,Shadow] [--modifiers Keyed,Timer] [--config config/scenes.ts]
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -41,6 +41,7 @@ export const obsCapture = async (args: string[]) => {
     options: {
       config: { type: 'string', default: DEFAULT_CONFIG_PATH },
       'disable-filters': { type: 'string' },
+      modifiers: { type: 'string' },
       save: { type: 'string' },
       source: { type: 'string' },
       'watch-input': { type: 'string' },
@@ -51,9 +52,15 @@ export const obsCapture = async (args: string[]) => {
 
   const config = await loadConfig(values.config);
   const connection = toolObsConnection(config);
+  // Modifiers to apply the scene with, as the script would with them switched on
+  const modifiers =
+    values.modifiers
+      ?.split(',')
+      .map((name) => name.trim())
+      .filter(Boolean) ?? [];
   const shotSource = values.source ?? config.container;
   const disableFilters = values['disable-filters']?.split(',') ?? [];
-  const steps = planLayoutMoves(config, sceneKey);
+  const steps = planLayoutMoves(config, sceneKey, undefined, modifiers);
   const borders = steps.filter((step) => step.kind === 'border').map((step) => step.source);
 
   const client = await connectObs(connection);
@@ -112,7 +119,7 @@ export const obsCapture = async (args: string[]) => {
       }
     })();
 
-    const summary = await runLayout({ config, sceneKey, connection });
+    const summary = await runLayout({ config, sceneKey, modifiers, connection });
     // Staged moves end when the last stage does
     await sleep(Math.max(0, ...summary.steps.map((step) => step.delay + step.duration)) + 500);
     sampling.active = false;
