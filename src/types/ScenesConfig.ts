@@ -103,9 +103,9 @@ export interface FirebotSettings {
   profile?: string;
   /** Firebot's local HTTP API. Default "http://localhost:7472/api/v1". */
   apiUrl?: string;
-  /** Custom variable that holds this config, written by `deploy` and read by the presets. Default "layoutScenes". */
+  /** Custom variable that holds this config, written by `firebot:deploy` and read by the presets. Default "layoutScenes". */
   variable?: string;
-  /** Firebot executable, for `restart-firebot` where the default install location does not apply. */
+  /** Firebot executable, for `firebot:restart` where the default install location does not apply. */
   executable?: string;
 }
 

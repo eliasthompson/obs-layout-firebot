@@ -6,8 +6,7 @@
     "moduleResolution": "bundler",
     "noEmit": true,
     "paths": {
-      "@/*": ["./src/*"],
-      "@eliasthompson/obs-layout-firebot": ["./src/index.ts"]
+      "@/*": ["./src/*"]
     },
     "resolveJsonModule": true,
     "skipLibCheck": true,

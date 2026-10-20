@@ -12,9 +12,10 @@ Firebot custom script, plus the `obs-layout-firebot` CLI to install and operate 
 - `npm run test` / `npm run test:coverage` / `npm run test:watch`: Vitest
 - `npm run build`: tsdown, emits `dist/obs-layout.js` (the Firebot script, one CommonJS file with the library bundled
   in), `dist/index.js` and `dist/index.d.ts` (the library and config types), and `dist/cli.js` (the CLI)
-- `npm run obs:deploy`, `obs:restart`, `obs:verify`, `obs:capture`, `firebot:deploy`, `firebot:restart`: the CLI's
-  commands run from source with `tsx` (`tsx tools/cli.ts <command>`). Commands are grouped by the program they act
-  on, and each deploy is the one command for its side; the steps it is made of live in `tools/lib`. See README.md
+- `npm run dev`: tsdown in watch mode, so a project that links this checkout runs the current source. The CLI's
+  commands (`obs:deploy`, `obs:restart`, `obs:verify`, `obs:capture`, `firebot:deploy`, `firebot:restart`) run there,
+  against that project's config. Commands are grouped by the program they act on, and each deploy is the one command
+  for its side; the steps it is made of live in `tools/lib`. See README.md
 
 Before finishing a change, run typecheck, lint, format check, test coverage, and build. All five must pass.
 
@@ -36,8 +37,8 @@ Before finishing a change, run typecheck, lint, format check, test coverage, and
   whether it is live (`obs.ts`). Tools import from `@/` like the source and are typechecked and linted, but have no
   tests, so logic worth testing (preset syncing, settings merging) belongs in `src/lib`.
 - There is no config in this repo: the example lives in README.md, and a user's config lives in their own project,
-  where `firebot:deploy` also writes `preset-effect-lists.json`. `config/` is git-ignored so a local config can sit
-  here for development, for example one that re-exports the config of a sibling checkout.
+  where `firebot:deploy` also writes `preset-effect-lists.json`. To try a change against a real installation, link
+  this checkout into that project with `npx link`, keep `npm run dev` rebuilding `dist/`, and run the commands there.
 - `dist/`: build output, git-ignored. Never edit it.
 
 ## Conventions
@@ -71,8 +72,7 @@ Before finishing a change, run typecheck, lint, format check, test coverage, and
 ## Toolchain constraints
 
 - TypeScript is pinned to 6.x because typescript-eslint does not support 7.x yet. Do not upgrade it until it does.
-- Do not use `baseUrl` in tsconfig; `paths` resolves relative to the tsconfig file. `paths` also maps the package's
-  own name to `src/index.ts`, so configs in `config/` import it the way a user's config would.
+- Do not use `baseUrl` in tsconfig; `paths` resolves relative to the tsconfig file.
 - `src/` runs inside Firebot's Electron main process and uses Node built-ins and the global `WebSocket`; it is not
   platform-neutral and does not need to be. The CLI needs Node 22.4 or later for the global `WebSocket`.
 - To work against an unreleased `@eliasthompson/obs-layout-generator`, link the sibling repo with

@@ -361,9 +361,13 @@ key from the config instead.
 
 ## Development
 
-Needs Node 22.4 or later. In this repo, `npm run <command>` runs each CLI command from source (for example
-`npm run deploy -- --skip-obs`), and `config/` is git-ignored apart from the example, so your own `config/scenes.ts`
-can live here.
+Needs Node 22.4 or later. There is no config in this repo; to try a change against a real installation, link this
+checkout into the project that holds the config and keep the build current:
+
+```sh
+npx link ../obs-layout-firebot   # in the project with the config, which then runs this checkout's CLI and script
+npm run dev                      # here, rebuilding dist/ on every change
+```
 
 ```sh
 npm run typecheck
