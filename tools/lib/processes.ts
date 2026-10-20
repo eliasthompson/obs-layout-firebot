@@ -86,6 +86,17 @@ export interface App {
 
 export type RestartOutcome = 'manual' | 'restarted' | 'started';
 
+/** What `restartApp` would do, for a dry run: reports the close and the start without doing either. */
+export const describeRestart = (app: App) => {
+  const launcher = app.launcher();
+  const command = [launcher.command, ...launcher.args].join(' ');
+  console.log(
+    isRunning(app.processName)
+      ? `dry run: ${app.label} would be closed, never forcibly, and started again (${command})`
+      : `dry run: ${app.label} is not running and would be started (${command})`,
+  );
+};
+
 /**
  * Restart an app around a step that needs it closed, such as editing a file it reads at startup. The app is closed
  * the way its window would be and never forced. When it cannot be closed from here, the user is asked to close it and
