@@ -51,7 +51,8 @@
   },
   "dependencies": {
     "@eliasthompson/obs-layout-generator": "^2.0.0",
-    "jiti": "^2.7.0"
+    "jiti": "^2.7.0",
+    "uuid": "^14.0.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -25,6 +25,7 @@ import {
   MOVE_VALUE_TYPE_SINGLE_SETTING,
 } from '@/constants/moveTransition';
 import { STANDBY_TEXT_BOUNDS_TYPE } from '@/constants/obsAlignment';
+import { containsValues } from '@/lib/containsValues';
 import { colorMoveFilterSettings } from '@/lib/filterSettings';
 import { listBindings } from '@/lib/listBindings';
 import { moveFilterName } from '@/lib/moveFilterName';
@@ -42,14 +43,6 @@ interface Filter {
   filterEnabled: boolean;
   filterSettings: Record<string, unknown>;
 }
-
-/** Whether every value in `want` is in `have`, nested objects included. Keys only `have` holds do not matter. */
-const holds = (want: unknown, have: unknown): boolean =>
-  typeof want === 'object' && want !== null
-    ? typeof have === 'object' &&
-      have !== null &&
-      Object.entries(want).every(([key, value]) => holds(value, (have as Record<string, unknown>)[key]))
-    : want === have;
 
 interface Transform {
   boundsType: string;
@@ -97,7 +90,7 @@ export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun
       console.log(`SKIP    ${sourceName} / ${filterName} exists but is a ${existing.filterKind}`);
       return false;
     }
-    if (existing?.filterEnabled === enabled && holds(filterSettings, existing.filterSettings)) return true;
+    if (existing?.filterEnabled === enabled && containsValues(filterSettings, existing.filterSettings)) return true;
     changes += 1;
     console.log(`${would}${existing ? 'UPDATE' : 'CREATE'}  ${sourceName} / ${filterName}`);
     if (dryRun) return true;

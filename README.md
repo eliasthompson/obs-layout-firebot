@@ -63,9 +63,9 @@ After that, each scene key is a preset effect list in Firebot that you can run f
 or anywhere else Firebot runs effects. `npx obs-layout-firebot obs:verify "<scene key>"` applies one from the terminal
 and checks the result.
 
-`config/` is yours to version: the config holds scene and source names, and `preset-effect-lists.json`, which
-`firebot:deploy` writes, holds the ids that keep your presets stable across machines. Keep the OBS password out of the
-config (see [Machine settings](#machine-settings)) if the repository is shared.
+`config/` is yours to version; the config holds scene and source names. The presets derive from it, ids included, so
+every machine makes the same presets and there is nothing else to keep. Keep the OBS password out of the config (see
+[Machine settings](#machine-settings)) if the repository is shared.
 
 ## OBS setup
 
@@ -90,9 +90,10 @@ config (see [Machine settings](#machine-settings)) if the repository is shared.
   settings from the profile's `integrations.json`, so there is nothing else to configure.
 - **Run Custom Scripts** (Settings, Scripts) and **Persist Custom Variables** (Settings, Advanced) must be on;
   `firebot:restart` turns both on for you. Without the second, the config is gone after a restart.
-- Preset effect lists: one per scene key, each with a **Change OBS Scene** effect for the container scene and a
-  **Run Custom Script** effect running `obs-layout.js` with the `sceneKey` parameter set to the key. `firebot:deploy`
-  generates them and `firebot:restart` installs them into the profile.
+- Preset effect lists: one per scene key, each a **Run Custom Script** effect running `obs-layout.js` with the
+  `sceneKey` parameter set to the key. Their ids derive from the config variable and the scene key, so a Stream Deck
+  button or command that runs one keeps working across deploys and machines. `firebot:restart` installs them into the
+  profile, and `firebot:deploy` runs it when they are missing or out of date.
 
 Firebot's HTTP API cannot create preset lists, and Firebot caches a custom script once loaded, so both the presets
 and a new build need a Firebot restart to take effect.
@@ -302,7 +303,7 @@ the config takes `--config <path>` (default `config/scenes.ts`); every command t
 | `obs:restart`     | Restarts OBS, never forcibly, after checking that it is not streaming or recording.                                         |
 | `obs:verify`      | `obs:verify "<scene key>"`: applies a scene from this machine and compares every item with the plan; exits 1 on a mismatch. |
 | `obs:capture`     | `obs:capture "<scene key>" --save frames/`: screenshots during a transition, or white-pixel counts without it.              |
-| `firebot:deploy`  | Checks, stores, syncs the presets, installs the script, and asks to restart; see below. `--skip-obs`, `--no-restart`.       |
+| `firebot:deploy`  | Checks, stores, installs the script, and asks to restart for new presets or a new script; see below. `--skip-obs`.          |
 | `firebot:restart` | Restarts Firebot, never forcibly, around installing the presets and turning on the two settings above.                      |
 
 Version 2 grouped and reduced the commands: `setup` and `fades` became steps of `obs:deploy`, `install-script` a step
@@ -344,17 +345,17 @@ that is replaced is backed up next to it, with a timestamp.
    to be started when it is not running; pass `--skip-obs` to deploy without it.
 2. It stores the config in the `layoutScenes` variable (or `firebot.variable`). The next preset run uses it; nothing
    needs a restart.
-3. It makes `config/preset-effect-lists.json` match the scene keys: a preset is added for every new key and removed
-   for every key that is gone, and existing presets keep their ids.
-4. It installs the built script into the profile when it differs from the installed one.
-5. When Firebot's loaded presets differ from the file, or the script changed, it asks whether to restart Firebot now,
-   installs the presets and settings into the profile while Firebot is closed, and waits for Firebot to come back
-   with the right presets.
+3. It installs the built script into the profile when it differs from the installed one.
+4. It derives one preset per scene key from the config and compares them with the profile's presets and the ones
+   Firebot has loaded.
+5. When a preset is missing, out of date, or left over from a removed key, or the script changed, it asks whether to
+   restart Firebot now (`--no-restart` declines), installs the presets and settings into the profile while Firebot is
+   closed, and waits for Firebot to come back with the right presets.
 
 Firebot only reads presets and scripts at startup, which is why adding or removing scene keys, or a new build, ends
-in a restart. The presets file owns the layout presets: the restart replaces the profile's layout presets with it and
-keeps any other presets you made in Firebot. Deleting a layout preset in Firebot's UI does not stick; remove its scene
-key from the config instead.
+in a restart. The config owns the layout presets: the restart replaces the profile's layout presets with the config's
+and keeps any other presets you made in Firebot. Deleting or editing a layout preset in Firebot's UI does not stick;
+change the config instead.
 
 ## Adding compositions
 

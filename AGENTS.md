@@ -36,8 +36,8 @@ Before finishing a change, run typecheck, lint, format check, test coverage, and
   control (`processes.ts`), the two apps' process names and launchers (`apps.ts`), and OBS-side questions such as
   whether it is live (`obs.ts`). Tools import from `@/` like the source and are typechecked and linted, but have no
   tests, so logic worth testing (preset syncing, settings merging) belongs in `src/lib`.
-- There is no config in this repo: the example lives in README.md, and a user's config lives in their own project,
-  where `firebot:deploy` also writes `preset-effect-lists.json`. To try a change against a real installation, link
+- There is no config in this repo: the example lives in README.md, and a user's config lives in their own project.
+  The tools write nothing there; the Firebot presets derive from the config. To try a change against a real installation, link
   this checkout into that project with `npx link`, keep `npm run dev` rebuilding `dist/`, and run the commands there.
 - `dist/`: build output, git-ignored. Never edit it.
 

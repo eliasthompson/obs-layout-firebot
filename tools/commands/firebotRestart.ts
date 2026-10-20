@@ -1,50 +1,50 @@
-// Restarts Firebot around installing the presets file into the profile and making sure custom scripts and persistent
-// custom variables are enabled, since Firebot reads these files only at startup and caches custom scripts. Firebot is
-// closed the way its window would be, never forcibly; one that cannot be closed from here, for example running as
-// administrator, is left for you to close, and then to start again. Backs up every file it replaces next to it.
-// --dry-run reports what it would install and the restart without writing, closing, or starting anything.
+// Restarts Firebot around installing the config's presets into the profile and making sure custom scripts and
+// persistent custom variables are enabled, since Firebot reads these files only at startup and caches custom scripts.
+// The presets derive from the config, so without one the profile's presets are left as they are. Firebot is closed the
+// way its window would be, never forcibly; one that cannot be closed from here, for example running as administrator,
+// is left for you to close, and then to start again. Backs up every file it replaces next to it. --dry-run reports
+// what it would install and the restart without writing, closing, or starting anything.
 //
-//   obs-layout-firebot firebot:restart [--config config/scenes.ts] [--presets config/preset-effect-lists.json]
-//     [--profile-dir <Firebot profile folder>] [--yes] [--dry-run]
+//   obs-layout-firebot firebot:restart [--config config/scenes.ts] [--profile-dir <Firebot profile folder>] [--yes]
+//     [--dry-run]
 import { copyFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
-import type { PresetEffectList } from '@/lib/createPresetEffectList';
 import type { FirebotSettingsFile } from '@/lib/enableScriptSettings';
 import type { StoredPreset } from '@/lib/mergeLayoutPresets';
 import type { ScenesConfig } from '@/types/ScenesConfig';
 
+import { createPresetEffectLists } from '@/lib/createPresetEffectList';
 import { enableScriptSettings } from '@/lib/enableScriptSettings';
 import { mergeLayoutPresets } from '@/lib/mergeLayoutPresets';
 
 import { FIREBOT_PROCESS_NAME, firebotApp } from '../lib/apps';
-import {
-  backupPath,
-  confirm,
-  DEFAULT_PRESETS_PATH,
-  firebotProfileDir,
-  loadOptionalConfig,
-  readJson,
-  writeJson,
-} from '../lib/environment';
+import { backupPath, confirm, firebotProfileDir, loadOptionalConfig, readJson, writeJson } from '../lib/environment';
 import { describeRestart, isRunning, restartApp } from '../lib/processes';
 
 export interface RestartFirebotOptions {
   config: ScenesConfig | undefined;
-  presetsPath: string;
   profileDir?: string;
 }
 
+/** The profile's presets file, which Firebot reads at startup and writes when presets change in its UI. */
+const profilePresetsPath = (profileDir: string) => join(profileDir, 'effects', 'preset-effect-lists.json');
+
+/** The presets the profile holds, by id. */
+export const readProfilePresets = (profileDir: string): Record<string, StoredPreset> => {
+  const path = profilePresetsPath(profileDir);
+  return existsSync(path) ? (readJson(path) as Record<string, StoredPreset>) : {};
+};
+
 /** Write the presets and settings into the profile. Only safe while Firebot is closed, unless it is a dry run. */
-const installProfileFiles = (profileDir: string, presetsPath: string, dryRun = false) => {
+const installProfileFiles = (profileDir: string, config: ScenesConfig | undefined, dryRun = false) => {
   const would = dryRun ? 'dry run: would have ' : '';
 
-  // The presets file owns every layout preset; presets made for other things stay in the profile
-  if (existsSync(presetsPath)) {
-    const target = join(profileDir, 'effects', 'preset-effect-lists.json');
-    const profilePresets = existsSync(target) ? (readJson(target) as Record<string, StoredPreset>) : {};
-    const merge = mergeLayoutPresets(profilePresets, readJson(presetsPath) as Record<string, PresetEffectList>);
+  // The config owns every layout preset; presets made for other things stay in the profile
+  if (config) {
+    const target = profilePresetsPath(profileDir);
+    const merge = mergeLayoutPresets(readProfilePresets(profileDir), createPresetEffectLists(config));
     if (!dryRun) {
       if (existsSync(target)) copyFileSync(target, backupPath(target));
       writeJson(target, merge.presets);
@@ -53,7 +53,7 @@ const installProfileFiles = (profileDir: string, presetsPath: string, dryRun = f
       `${would}installed ${String(merge.added)} layout presets to ${target} (${String(merge.replaced)} previous layout presets replaced, ${String(merge.kept)} other presets kept)`,
     );
   } else {
-    console.log(`no presets file at ${presetsPath}; run firebot:deploy to create it`);
+    console.log('no config, so the presets were left as they are');
   }
 
   // The settings the script needs
@@ -71,10 +71,10 @@ const installProfileFiles = (profileDir: string, presetsPath: string, dryRun = f
 };
 
 /** Restart Firebot with the presets and settings installed. Resolves with how the restart went. */
-export const restartFirebot = ({ config, presetsPath, profileDir: profileDirFlag }: RestartFirebotOptions) => {
+export const restartFirebot = ({ config, profileDir: profileDirFlag }: RestartFirebotOptions) => {
   const profileDir = firebotProfileDir(config, profileDirFlag);
   return restartApp(firebotApp(config), () => {
-    installProfileFiles(profileDir, presetsPath);
+    installProfileFiles(profileDir, config);
   });
 };
 
@@ -84,7 +84,6 @@ export const firebotRestart = async (args: string[]) => {
     options: {
       config: { type: 'string' },
       'dry-run': { type: 'boolean', default: false },
-      presets: { type: 'string', default: DEFAULT_PRESETS_PATH },
       'profile-dir': { type: 'string' },
       yes: { type: 'boolean', default: false },
     },
@@ -92,7 +91,7 @@ export const firebotRestart = async (args: string[]) => {
   const config = await loadOptionalConfig(values.config);
 
   if (values['dry-run']) {
-    installProfileFiles(firebotProfileDir(config, values['profile-dir']), values.presets, true);
+    installProfileFiles(firebotProfileDir(config, values['profile-dir']), config, true);
     describeRestart(firebotApp(config));
     return;
   }
@@ -101,5 +100,5 @@ export const firebotRestart = async (args: string[]) => {
     return;
   }
 
-  await restartFirebot({ config, presetsPath: values.presets, profileDir: values['profile-dir'] });
+  await restartFirebot({ config, profileDir: values['profile-dir'] });
 };

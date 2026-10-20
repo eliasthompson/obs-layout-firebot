@@ -1,38 +1,34 @@
 // Deploys the config to Firebot in one go: checks it against OBS (scenes, items, filters), stores it in Firebot's
-// custom variable, keeps the presets file at one preset per scene key, installs the built script into the profile
-// when it changed, and offers to restart Firebot when it still has to load presets or a new script. Firebot must be
-// running; OBS is waited for unless --skip-obs is given. Firebot is never closed forcibly: one that cannot be closed
-// from here is left for you to close, and then to start again. --dry-run reports every change without writing.
+// custom variable, installs the built script into the profile when it changed, and offers to restart Firebot when it
+// still has to load the config's presets (one per scene key, derived from the config) or a new script. Firebot must
+// be running; OBS is waited for unless --skip-obs is given. Firebot is never closed forcibly: one that cannot be
+// closed from here is left for you to close, and then to start again. --dry-run reports every change without writing.
 //
-//   obs-layout-firebot firebot:deploy [--config config/scenes.ts] [--presets config/preset-effect-lists.json]
-//     [--variable layoutScenes] [--skip-obs] [--yes] [--no-restart] [--dry-run]
-import { existsSync } from 'node:fs';
+//   obs-layout-firebot firebot:deploy [--config config/scenes.ts] [--variable layoutScenes] [--skip-obs] [--yes]
+//     [--no-restart] [--dry-run]
 import { parseArgs } from 'node:util';
 
-import type { PresetEffectList } from '@/lib/createPresetEffectList';
 import type { ObsInventory } from '@/types/ObsInventory';
 import type { ScenesConfig } from '@/types/ScenesConfig';
 
+import { createPresetEffectLists } from '@/lib/createPresetEffectList';
 import { findConfigProblems } from '@/lib/findConfigProblems';
 import { listBindings } from '@/lib/listBindings';
-import { syncPresetEffectLists } from '@/lib/syncPresetEffectLists';
+import { compareLayoutPresets } from '@/lib/mergeLayoutPresets';
 
 import {
   configVariable,
   confirm,
   DEFAULT_CONFIG_PATH,
-  DEFAULT_PRESETS_PATH,
   firebotApiUrl,
   firebotProfileDir,
   loadConfig,
-  readJson,
   sleep,
   toolObsConnection,
-  writeJson,
 } from '../lib/environment';
 import { installScriptFile } from '../lib/installScript';
 import { connectObsPatiently, ensureObsRunning } from '../lib/obs';
-import { restartFirebot } from './firebotRestart';
+import { readProfilePresets, restartFirebot } from './firebotRestart';
 
 /** How long to wait for Firebot to come back with the presets: longer when the user starts it by hand. */
 const RESTART_WAIT_MS = 180_000;
@@ -72,10 +68,8 @@ const readObsInventory = async (config: ScenesConfig): Promise<ObsInventory> => 
   return inventory;
 };
 
-const loadedPresetNames = async (apiUrl: string) =>
-  new Set(
-    ((await (await fetch(`${apiUrl}/effects/preset`)).json()) as { name: string }[]).map((preset) => preset.name),
-  );
+const loadedPresetIds = async (apiUrl: string) =>
+  new Set(((await (await fetch(`${apiUrl}/effects/preset`)).json()) as { id: string }[]).map((preset) => preset.id));
 
 export const firebotDeploy = async (args: string[]) => {
   const { values } = parseArgs({
@@ -84,7 +78,6 @@ export const firebotDeploy = async (args: string[]) => {
       config: { type: 'string', default: DEFAULT_CONFIG_PATH },
       'dry-run': { type: 'boolean', default: false },
       'no-restart': { type: 'boolean', default: false },
-      presets: { type: 'string', default: DEFAULT_PRESETS_PATH },
       'skip-obs': { type: 'boolean', default: false },
       variable: { type: 'string' },
       yes: { type: 'boolean', default: false },
@@ -131,31 +124,20 @@ export const firebotDeploy = async (args: string[]) => {
     console.log(`stored ${scenesTotal} scenes in the "${variable}" variable`);
   }
 
-  // 3. Presets: the presets file holds exactly one per scene key
-  const stored = existsSync(values.presets) ? (readJson(values.presets) as Record<string, PresetEffectList>) : {};
-  const { presets, added, removed, updated } = syncPresetEffectLists(stored, config);
-  if (added.length || removed.length || updated.length || !existsSync(values.presets)) {
-    const would = dryRun ? 'would ' : '';
-    if (!dryRun) writeJson(values.presets, presets);
-    if (added.length) console.log(`${would}added presets to ${values.presets}: ${added.join(', ')}`);
-    if (removed.length) console.log(`${would}removed presets from ${values.presets}: ${removed.join(', ')}`);
-    if (updated.length) console.log(`${would}pointed presets at the "${variable}" variable: ${updated.join(', ')}`);
-  }
+  // 3. The script: Firebot caches a loaded one, so a new build is a reason to restart
+  const profileDir = firebotProfileDir(config);
+  const scriptChanged = installScriptFile(profileDir, dryRun) === 'installed';
 
-  // 4. The script: Firebot caches a loaded one, so a new build is another reason to restart
-  const scriptChanged = installScriptFile(firebotProfileDir(config), dryRun) === 'installed';
-
-  // Firebot's loaded presets have to match the file: new ones to load, removed ones to drop, changed ones to reload
-  const firebotNames = await loadedPresetNames(apiUrl).catch((error: unknown) => {
+  // 4. The presets derive from the config. The profile has to hold exactly them, and Firebot has to have loaded them
+  const presets = createPresetEffectLists(config);
+  const profilePresets = readProfilePresets(profileDir);
+  const { stale, leftOver } = compareLayoutPresets(profilePresets, presets);
+  const loadedIds = await loadedPresetIds(apiUrl).catch((error: unknown) => {
     throw new Error(`Firebot is not reachable at ${apiUrl}: ${error instanceof Error ? error.message : String(error)}`);
   });
-  const ourNames = new Set(Object.values(presets).map((preset) => preset.name));
-  const notLoaded = [...ourNames].filter((name) => !firebotNames.has(name));
-  const leftOver = [...firebotNames].filter(
-    (name) => removed.includes(name) || (!ourNames.has(name) && name in config.scenes),
-  );
+  const notLoaded = Object.values(presets).filter((preset) => !loadedIds.has(preset.id));
 
-  if (!notLoaded.length && !leftOver.length && !updated.length && !scriptChanged) {
+  if (!stale.length && !leftOver.length && !notLoaded.length && !scriptChanged) {
     console.log(
       dryRun
         ? 'dry run: Firebot would need no restart'
@@ -165,9 +147,13 @@ export const firebotDeploy = async (args: string[]) => {
   }
 
   // 5. Firebot only reads presets and scripts at startup
-  if (notLoaded.length) console.log(`Firebot has not loaded these presets: ${notLoaded.join(', ')}`);
-  if (leftOver.length) console.log(`Firebot still has these removed presets: ${leftOver.join(', ')}`);
-  if (updated.length) console.log(`Firebot has an old version of these presets: ${updated.join(', ')}`);
+  const names = (presetIds: string[]) =>
+    presetIds.map((id) => (typeof profilePresets[id].name === 'string' ? profilePresets[id].name : id)).join(', ');
+  if (stale.length) console.log(`Firebot's profile lacks these presets as the config makes them: ${stale.join(', ')}`);
+  if (notLoaded.length) {
+    console.log(`Firebot has not loaded these presets: ${notLoaded.map((preset) => preset.name).join(', ')}`);
+  }
+  if (leftOver.length) console.log(`Firebot still has layout presets the config no longer makes: ${names(leftOver)}`);
   if (scriptChanged) console.log('Firebot has an old build of the script');
   if (dryRun) {
     console.log('dry run: Firebot would be restarted to apply them');
@@ -178,14 +164,14 @@ export const firebotDeploy = async (args: string[]) => {
     return;
   }
 
-  const outcome = await restartFirebot({ config, presetsPath: values.presets });
+  const outcome = await restartFirebot({ config });
 
   if (outcome === 'manual') console.log('waiting for Firebot to come back with the presets');
   const deadline = Date.now() + (outcome === 'manual' ? MANUAL_RESTART_WAIT_MS : RESTART_WAIT_MS);
   while (Date.now() < deadline) {
     try {
-      const names = await loadedPresetNames(apiUrl);
-      if (notLoaded.every((name) => names.has(name)) && leftOver.every((name) => !names.has(name))) {
+      const ids = await loadedPresetIds(apiUrl);
+      if (Object.keys(presets).every((id) => ids.has(id)) && leftOver.every((id) => !ids.has(id))) {
         console.log('Firebot is back with exactly the presets of the config; deployed');
         return;
       }

@@ -18,7 +18,6 @@ import { readFirebotIntegrations } from '@/lib/readFirebotIntegrations';
 import { resolveObsConnection } from '@/lib/resolveObsConnection';
 
 export const DEFAULT_CONFIG_PATH = join('config', 'scenes.ts');
-export const DEFAULT_PRESETS_PATH = join('config', 'preset-effect-lists.json');
 export const DEFAULT_FIREBOT_PROFILE = 'Main';
 export const DEFAULT_FIREBOT_API_URL = 'http://localhost:7472/api/v1';
 export const DEFAULT_SCENE_COLLECTION = 'Untitled';

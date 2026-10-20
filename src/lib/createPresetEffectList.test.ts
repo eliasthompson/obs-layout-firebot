@@ -1,26 +1,24 @@
+import { v5 as uuidV5 } from 'uuid';
 import { describe, expect, it } from 'vitest';
 
-import { createPresetEffectList, presetSceneKey } from '@/lib/createPresetEffectList';
+import { createPresetEffectList, createPresetEffectLists, PRESET_ID_NAMESPACE } from '@/lib/createPresetEffectList';
 import { getDefaultParameters } from '@/lib/firebotScript';
 
 describe('createPresetEffectList', () => {
-  it('builds a preset that changes to the container and runs the script with the scene key', () => {
-    let next = 0;
-    const preset = createPresetEffectList('[Scene] 16:9 1P', '[Scene] Program', {
-      createId: () => `id-${String(++next)}`,
-    });
+  it('builds a preset that runs the script with the scene key, with ids derived from the variable and key', () => {
+    const preset = createPresetEffectList('[Scene] 16:9 1P');
     const definitions = getDefaultParameters();
+    const id = uuidV5('layoutScenes\u0000[Scene] 16:9 1P', PRESET_ID_NAMESPACE);
 
     expect(preset).toEqual({
-      id: 'id-1',
+      id,
       name: '[Scene] 16:9 1P',
       args: [],
       effects: {
-        id: 'id-2',
+        id: uuidV5('effects', id),
         list: [
-          { id: 'id-3', type: 'ebiggz:obs-change-scene', active: true, sceneName: '[Scene] Program', custom: false },
           {
-            id: 'id-4',
+            id: uuidV5('script', id),
             type: 'firebot:customscript',
             active: true,
             scriptName: 'obs-layout.js',
@@ -35,35 +33,28 @@ describe('createPresetEffectList', () => {
     });
   });
 
-  it('points the script at another config variable', () => {
-    const preset = createPresetEffectList('key', 'container', { configVariable: 'otherScenes' });
-    const parameters = preset.effects.list[1]?.parameters as { configVariable: { value: string } };
+  it('makes the same preset every time, and another one for another key or config variable', () => {
+    const preset = createPresetEffectList('key');
 
+    expect(createPresetEffectList('key')).toEqual(preset);
+    expect(createPresetEffectList('other').id).not.toBe(preset.id);
+
+    const elsewhere = createPresetEffectList('key', 'otherScenes');
+    const parameters = elsewhere.effects.list[0]?.parameters as { configVariable: { value: string } };
+    expect(elsewhere.id).not.toBe(preset.id);
     expect(parameters.configVariable.value).toBe('otherScenes');
-  });
-
-  it('uses random ids by default', () => {
-    const preset = createPresetEffectList('key', 'container');
-
-    expect(preset.id).toMatch(/^[0-9a-f-]{36}$/);
-    expect(preset.id).not.toBe(preset.effects.id);
   });
 });
 
-describe('presetSceneKey', () => {
-  it('reads the scene key from the script effect', () => {
-    const preset = createPresetEffectList('key', 'container');
-    preset.name = 'Renamed by hand';
+describe('createPresetEffectLists', () => {
+  it("makes one preset per scene key, by id, for the config's variable", () => {
+    const config = { container: 'C', participants: {}, scenes: { A: { participants: [] }, B: { participants: [] } } };
+    const a = createPresetEffectList('A');
+    const b = createPresetEffectList('B');
 
-    expect(presetSceneKey(preset)).toBe('key');
-  });
-
-  it('falls back to the preset name without a usable script parameter', () => {
-    const preset = createPresetEffectList('key', 'container');
-    preset.effects.list = [{ type: 'firebot:customscript', parameters: { sceneKey: { value: '' } } }];
-    expect(presetSceneKey(preset)).toBe('key');
-
-    preset.effects.list = [];
-    expect(presetSceneKey(preset)).toBe('key');
+    expect(createPresetEffectLists(config)).toEqual({ [a.id]: a, [b.id]: b });
+    expect(Object.values(createPresetEffectLists({ ...config, firebot: { variable: 'v' } }))[0]).toEqual(
+      createPresetEffectList('A', 'v'),
+    );
   });
 });
