@@ -52,7 +52,7 @@ In a folder of your own (an existing project works too):
 ```sh
 npm install --save-dev @eliasthompson/obs-layout-firebot
 # describe your OBS scenes and sources in config/scenes.ts (see Config below), then:
-npx obs-layout-firebot obs:deploy       # creates the filters in OBS, then restarts OBS to set the item transitions
+npx obs-layout-firebot obs:deploy       # creates the filters in OBS, then restarts OBS if the item transitions need setting
 npx obs-layout-firebot firebot:deploy   # checks the config against OBS, stores it in Firebot, installs the script and presets
 ```
 
@@ -295,7 +295,7 @@ the config takes `--config <path>` (default `config/scenes.ts`); every command t
 
 | Command           | What it does                                                                                                                |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `obs:deploy`      | Sets OBS up for the config, then asks to restart OBS around setting the item transitions; see below. `--no-restart`.        |
+| `obs:deploy`      | Sets OBS up for the config, then asks to restart OBS when the item transitions need setting; see below. `--no-restart`.     |
 | `obs:restart`     | Restarts OBS, never forcibly, after checking that it is not streaming or recording.                                         |
 | `obs:verify`      | `obs:verify "<scene key>"`: applies a scene from this machine and compares every item with the plan; exits 1 on a mismatch. |
 | `obs:capture`     | `obs:capture "<scene key>" --save frames/`: screenshots during a transition, or white-pixel counts without it.              |
@@ -325,10 +325,12 @@ that is replaced is backed up next to it, with a timestamp.
 1. It runs the setup over the websocket: filters created or updated, bounds types set, stale Move Source filters
    removed, the standby text scene cropped. This part is idempotent and is all that runs without the restart.
 2. It asks which scene collection OBS has loaded, and whether OBS is streaming or recording.
-3. It asks to restart OBS, and around that restart sets every toggled item's show and hide transition in the
-   collection file, which only that file holds and OBS only reads at startup. OBS saves the collection on exit, so
-   the setup's filters are in the file before it is edited. `--transition none|fade` and `--duration` set what the
-   items get (default `none`, `300`). `--no-restart`, or declining, leaves the restart for a later `obs:deploy`.
+3. It sets every toggled item's show and hide transition in the collection file, which only that file holds and OBS
+   only reads at startup, so it asks to restart OBS around writing it. OBS saves the collection on exit, so the
+   setup's filters are in the file before it is edited. When every item already has its transition, and the saved
+   file holds every bound item, there is nothing to write and OBS is not restarted. `--transition none|fade` and
+   `--duration` set what the items get (default `none`, `300`). `--no-restart`, or declining, leaves the restart for a
+   later `obs:deploy`.
 
 ### Deploying a config change
 

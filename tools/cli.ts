@@ -17,7 +17,7 @@ interface Command {
 const COMMANDS: Record<string, Command> = {
   'obs:deploy': {
     run: obsDeploy,
-    summary: 'set OBS up for the config, then restart it to set the item transitions (asks first)',
+    summary: 'set OBS up for the config, then restart it if the item transitions need setting (asks first)',
   },
   'obs:restart': { run: obsRestart, summary: 'restart OBS, never forcibly' },
   'obs:verify': { run: obsVerify, summary: 'apply a scene key from this machine and compare the result with the plan' },

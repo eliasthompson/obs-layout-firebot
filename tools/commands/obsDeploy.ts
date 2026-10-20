@@ -1,8 +1,9 @@
-// Deploys the config to OBS in one go: runs the setup over the websocket, then restarts OBS around setting the scene
-// items' show and hide transitions, which only the scene collection file holds and OBS only reads at startup. OBS
-// writes the collection on exit, so the setup's filters are saved before the file is edited. Asks before restarting,
-// never closes OBS while it is streaming or recording, and never forces it: an OBS that cannot be closed from here is
-// left for you to close, and then to start again. --dry-run reports every change without touching OBS or the file.
+// Deploys the config to OBS in one go: runs the setup over the websocket, then, when the scene items' show and hide
+// transitions need setting, restarts OBS around writing them, since only the scene collection file holds them and OBS
+// only reads it at startup. OBS writes the collection on exit, so the setup's filters are saved before the file is
+// edited. Asks before restarting, never closes OBS while it is streaming or recording, and never forces it: an OBS that
+// cannot be closed from here is left for you to close, and then to start again. --dry-run reports every change
+// without touching OBS or the file.
 //
 //   obs-layout-firebot obs:deploy [--config config/scenes.ts] [--transition none|fade] [--duration 300]
 //     [--collection <path>] [--yes] [--no-restart] [--dry-run]
@@ -55,13 +56,21 @@ export const obsDeploy = async (args: string[]) => {
     client.close();
   }
   const collectionPath = obsSceneCollectionPath(config, values.collection, activeCollection);
-  const fadeOptions = { transition, duration, dryRun };
+  const fadeOptions = { transition, duration };
 
-  // 2. The transitions live in the collection file, which OBS rewrites on exit, so OBS has to be restarted around it
+  // 2. The transitions live in the collection file, which OBS rewrites on exit, so OBS has to be restarted around it.
+  // The file on disk is what OBS last saved: enough to see which items would change, and an item it does not hold yet
+  // is probably unsaved, which the restart saves before the file is written
+  console.log(`item transitions in ${collectionPath}:`);
+  const pending = writeFades(config, collectionPath, { ...fadeOptions, dryRun: true });
+  if (!pending.changed && !pending.missing) {
+    console.log(
+      dryRun ? 'dry run: OBS would need no restart' : 'the item transitions are set, so OBS needs no restart; deployed',
+    );
+    return;
+  }
   if (dryRun) {
-    console.log(`dry run: OBS would be restarted to set the item transitions in ${collectionPath}:`);
-    // The file on disk is what OBS last saved, which is enough to see which items would change
-    writeFades(config, collectionPath, fadeOptions);
+    console.log('dry run: OBS would be restarted to set the item transitions');
     return;
   }
   if (live) {
@@ -74,7 +83,7 @@ export const obsDeploy = async (args: string[]) => {
   }
 
   await restartApp(obsApp(config), () => {
-    writeFades(config, collectionPath, fadeOptions);
+    writeFades(config, collectionPath, { ...fadeOptions, dryRun: false });
   });
   console.log('deployed to OBS');
 };

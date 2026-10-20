@@ -36,12 +36,19 @@ export const parseFadeTransition = (value: string): FadeTransition => {
   return value;
 };
 
-/** Set the transitions in the collection file, backing it up first. Returns how many items changed, or would. */
+export interface FadesResult {
+  /** Items whose transitions changed, or would. */
+  changed: number;
+  /** Bound items the file does not hold, usually ones OBS has not saved yet. */
+  missing: number;
+}
+
+/** Set the transitions in the collection file, backing it up first. */
 export const writeFades = (
   config: ScenesConfig,
   collectionPath: string,
   { transition, duration, dryRun }: FadesOptions,
-) => {
+): FadesResult => {
   const collection = JSON.parse(readFileSync(collectionPath, 'utf8')) as SceneCollection;
 
   // Without a transition id OBS cuts, which is what an item looks like before any transition was chosen
@@ -57,12 +64,14 @@ export const writeFades = (
         };
 
   let changed = 0;
+  let missing = 0;
   for (const { scene, source } of listBindings(config)) {
     const item = collection.sources
       .find((candidate) => candidate.name === scene)
       ?.settings?.items?.find((candidate) => candidate.name === source);
     if (!item) {
       console.log(`SKIP  ${scene} / ${source}: not found in the scene collection`);
+      missing += 1;
       continue;
     }
     const before = JSON.stringify([item.show_transition, item.hide_transition]);
@@ -76,12 +85,12 @@ export const writeFades = (
   if (!changed) {
     console.log('nothing to change');
   } else if (dryRun) {
-    console.log(`dry run: ${String(changed)} items would be written to ${collectionPath}`);
+    console.log(`${String(changed)} items to write to ${collectionPath}`);
   } else {
     const backup = backupPath(collectionPath);
     copyFileSync(collectionPath, backup);
     writeFileSync(collectionPath, JSON.stringify(collection, null, 4));
     console.log(`wrote ${String(changed)} items to ${collectionPath}, backup at ${backup}`);
   }
-  return changed;
+  return { changed, missing };
 };

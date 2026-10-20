@@ -4,7 +4,7 @@
 // filter that fades their color filter's setting. Every toggled source but standby text gets an Opacity color filter
 // plus the Move Value filter that animates it, and the standby text scene is cropped at the canvas center. Move
 // Source filters on the managed scenes that no longer match a bound item (renamed or removed sources) are deleted.
-// Idempotent: existing filters are updated, not duplicated.
+// Idempotent: existing filters are updated only where they differ, never duplicated.
 import type { ObsClient } from '@/lib/connectObs';
 import type { ScenesConfig } from '@/types/ScenesConfig';
 
@@ -39,7 +39,17 @@ interface SceneItem {
 interface Filter {
   filterName: string;
   filterKind: string;
+  filterEnabled: boolean;
+  filterSettings: Record<string, unknown>;
 }
+
+/** Whether every value in `want` is in `have`, nested objects included. Keys only `have` holds do not matter. */
+const holds = (want: unknown, have: unknown): boolean =>
+  typeof want === 'object' && want !== null
+    ? typeof have === 'object' &&
+      have !== null &&
+      Object.entries(want).every(([key, value]) => holds(value, (have as Record<string, unknown>)[key]))
+    : want === have;
 
 interface Transform {
   boundsType: string;
@@ -69,26 +79,37 @@ export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun
   const filtersOf = async (sourceName: string) =>
     (await client.call('GetSourceFilterList', { sourceName })).filters as Filter[];
 
-  /** Create or update a filter and set its enabled state. Returns false when another kind of filter has the name. */
+  /**
+   * Create or update a filter and set its enabled state, leaving one that already matches alone. `initial` holds the
+   * values the transitions keep rewriting, such as an opacity: set when the filter is created, and never reset, so a
+   * hidden item stays faded out. Returns false when another kind of filter has the name.
+   */
   const ensureFilter = async (
     sourceName: string,
     filterName: string,
     filterKind: string,
     filterSettings: Record<string, unknown>,
     enabled = false,
+    initial: Record<string, unknown> = {},
   ) => {
     const existing = (await filtersOf(sourceName)).find((filter) => filter.filterName === filterName);
     if (existing && existing.filterKind !== filterKind) {
       console.log(`SKIP    ${sourceName} / ${filterName} exists but is a ${existing.filterKind}`);
       return false;
     }
+    if (existing?.filterEnabled === enabled && holds(filterSettings, existing.filterSettings)) return true;
     changes += 1;
     console.log(`${would}${existing ? 'UPDATE' : 'CREATE'}  ${sourceName} / ${filterName}`);
     if (dryRun) return true;
     if (existing) {
       await client.call('SetSourceFilterSettings', { sourceName, filterName, filterSettings, overlay: true });
     } else {
-      await client.call('CreateSourceFilter', { sourceName, filterName, filterKind, filterSettings });
+      await client.call('CreateSourceFilter', {
+        sourceName,
+        filterName,
+        filterKind,
+        filterSettings: { ...initial, ...filterSettings },
+      });
     }
     await client.call('SetSourceFilterEnabled', { sourceName, filterName, filterEnabled: enabled });
     return true;
@@ -174,15 +195,21 @@ export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun
     // The Opacity filter stays enabled: it is the fade itself. The Move Value filter animates it. Standby text never
     // fades, it slides behind the text scene's crop.
     if (kind !== 'text') {
-      await ensureFilter(source, OPACITY_FILTER_NAME, COLOR_FILTER_KIND, { opacity: 1 }, true);
-      await ensureFilter(source, OPACITY_MOVE_FILTER_NAME, MOVE_VALUE_FILTER_KIND, {
-        move_value_type: MOVE_VALUE_TYPE_SINGLE_SETTING,
-        filter: OPACITY_FILTER_NAME,
-        setting_name: 'opacity',
-        value_type: MOVE_VALUE_FLOAT,
-        setting_float: 1,
-        ...moveTiming,
-      });
+      await ensureFilter(source, OPACITY_FILTER_NAME, COLOR_FILTER_KIND, {}, true, { opacity: 1 });
+      await ensureFilter(
+        source,
+        OPACITY_MOVE_FILTER_NAME,
+        MOVE_VALUE_FILTER_KIND,
+        {
+          move_value_type: MOVE_VALUE_TYPE_SINGLE_SETTING,
+          filter: OPACITY_FILTER_NAME,
+          setting_name: 'opacity',
+          value_type: MOVE_VALUE_FLOAT,
+          ...moveTiming,
+        },
+        false,
+        { setting_float: 1 },
+      );
     }
 
     if (kind === 'border') {
@@ -194,14 +221,20 @@ export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun
         [WIDTH_FILTER_NAME, 'width', width],
         [HEIGHT_FILTER_NAME, 'height', height],
       ] as const) {
-        await ensureFilter(source, filterName, MOVE_VALUE_FILTER_KIND, {
-          move_value_type: MOVE_VALUE_TYPE_SINGLE_SETTING,
-          filter: '',
-          setting_name: settingName,
-          value_type: MOVE_VALUE_INT,
-          setting_int: value,
-          ...moveTiming,
-        });
+        await ensureFilter(
+          source,
+          filterName,
+          MOVE_VALUE_FILTER_KIND,
+          {
+            move_value_type: MOVE_VALUE_TYPE_SINGLE_SETTING,
+            filter: '',
+            setting_name: settingName,
+            value_type: MOVE_VALUE_INT,
+            ...moveTiming,
+          },
+          false,
+          { setting_int: value },
+        );
       }
 
       // The color filter is the user's own; the Move: Color filter starts at the color it has now
@@ -214,12 +247,14 @@ export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun
             await client.call('GetSourceFilter', { sourceName: source, filterName: borderColor.filter })
           ).filterSettings as Record<string, unknown>;
           const color = settings[borderColor.setting];
-          await ensureFilter(
-            source,
-            COLOR_MOVE_FILTER_NAME,
-            MOVE_VALUE_FILTER_KIND,
-            colorMoveFilterSettings(borderColor, typeof color === 'number' ? color : DEFAULT_COLOR),
+          // The target color is whatever the last recolor wrote, so only a new filter gets one
+          const { setting_color, ...colorMove } = colorMoveFilterSettings(
+            borderColor,
+            typeof color === 'number' ? color : DEFAULT_COLOR,
           );
+          await ensureFilter(source, COLOR_MOVE_FILTER_NAME, MOVE_VALUE_FILTER_KIND, colorMove, false, {
+            setting_color,
+          });
         }
       }
     }
@@ -232,15 +267,17 @@ export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun
     const { cut } = standbyLine(config, lineHeight);
     const item = itemsByScene.get(config.container)?.find((candidate) => candidate.sourceName === textScene);
     if (item) {
-      console.log(
-        `${would}TRANSFORM ${config.container} / ${textScene}: cropLeft=${String(cut)}, positionX=${String(cut)}`,
-      );
-      await setTransform(config.container, item.sceneItemId, {
-        positionX: cut,
-        positionY: 0,
-        alignment: 5,
-        cropLeft: cut,
-      });
+      const transform = (
+        await client.call('GetSceneItemTransform', { sceneName: config.container, sceneItemId: item.sceneItemId })
+      ).sceneItemTransform as Record<string, unknown>;
+      const wanted = { positionX: cut, positionY: 0, alignment: 5, cropLeft: cut };
+      const transformChanges = Object.entries(wanted).filter(([key, value]) => transform[key] !== value);
+      if (transformChanges.length) {
+        console.log(
+          `${would}TRANSFORM ${config.container} / ${textScene}: ${transformChanges.map(([key, value]) => `${key}=${String(value)}`).join(', ')}`,
+        );
+        await setTransform(config.container, item.sceneItemId, Object.fromEntries(transformChanges));
+      }
     } else {
       console.log(`SKIP    ${config.container} has no item "${textScene}"`);
     }
