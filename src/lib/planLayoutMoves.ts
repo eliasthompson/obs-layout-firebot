@@ -1,9 +1,10 @@
-import type { LayoutConfig, LayoutMetric, LayoutOptions, LayoutRegion } from '@eliasthompson/obs-layout-generator';
+import type { LayoutConfig, LayoutMetric, LayoutOptions } from '@eliasthompson/obs-layout-generator';
 
 import { createLayoutGenerator, LAYOUT_OPTIONS_DEFAULT } from '@eliasthompson/obs-layout-generator';
 
 import type { Binding, MoveStep, SourceSize } from '@/types/MoveStep';
 import type { ObsSceneItem, ObsState } from '@/types/ObsState';
+import type { Rect } from '@/types/Rect';
 import type {
   LayoutRegionName,
   ParticipantPoolEntry,
@@ -24,7 +25,7 @@ const MAIN_REGIONS = ['contentMain', 'camera', 'contentAux', 'info'] as const sa
 
 interface Target {
   /** `undefined` for layout items, which only fade and toggle. */
-  region: LayoutRegion | undefined;
+  region: Rect | undefined;
   visible: boolean;
   /** Border only: the color source's own size. */
   size?: SourceSize;
@@ -41,7 +42,7 @@ const resolveOption = <Name extends keyof typeof LAYOUT_OPTIONS_DEFAULT>(
  * How wide standby text renders in its bounding box: it covers the box from the left, so text relatively wider than
  * the box runs past its right edge. The box's own width when OBS did not report the source's size.
  */
-const coverWidth = (box: LayoutRegion, size: SourceSize | undefined) =>
+const coverWidth = (box: Rect, size: SourceSize | undefined) =>
   size && size.height > 0 ? Math.max(box.width, Math.ceil((size.width * box.height) / size.height)) : box.width;
 
 /** The font size for a text source of this height: `fontScale` of it, held within the binding's bounds. */
@@ -127,7 +128,7 @@ export const planLayoutMoves = (
 
   const line = config.standby ? standbyLine(config, config.standby.lineHeight) : undefined;
   const regionBorder = resolveOption('regionBorder', config, scene.options);
-  const neutral: LayoutRegion = {
+  const neutral: Rect = {
     x: Math.round(resolveOption('canvasWidth', config, scene.options) / 2),
     y: Math.round(resolveOption('canvasHeight', config, scene.options) / 2),
     width: 1,
@@ -165,7 +166,7 @@ export const planLayoutMoves = (
   });
 
   /** Where a region goes in a layout, or the neutral point when the layout does not use it. */
-  const layoutTarget = (kind: 'border' | 'source', region: LayoutRegion | undefined): Target =>
+  const layoutTarget = (kind: 'border' | 'source', region: Rect | undefined): Target =>
     region
       ? {
           region,
@@ -189,7 +190,14 @@ export const planLayoutMoves = (
       if (binding.border) {
         // The name sits inside its host region and has no border, so its border binding is sized like the name itself
         const border = region && regionName !== 'name' ? growRegion(region, regionBorder) : region;
-        steps.push(step({ scene: layout, source: binding.border, kind: 'border' }, layoutTarget('border', border)));
+        const borderStep = step(
+          { scene: layout, source: binding.border, kind: 'border' },
+          layoutTarget('border', border),
+        );
+        // A green screen camera has no border. Its border source still moves and sizes as if it framed the camera, so
+        // the two stay in step, but it fades out, and fades back in with the next layout that frames the camera
+        if (region && regionName !== 'name' && !region.hasBorder) borderStep.visible = false;
+        steps.push(borderStep);
       }
       return steps;
     });

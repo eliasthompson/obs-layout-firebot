@@ -5,6 +5,7 @@ import { createJiti } from 'jiti';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, extname, join, resolve } from 'node:path';
+import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
@@ -53,7 +54,7 @@ export const packageRoot = () => {
 export const loadConfig = async (path: string): Promise<ScenesConfig> => {
   const absolute = resolve(path);
   if (!existsSync(absolute)) {
-    throw new Error(`${path} does not exist; run \`obs-layout-firebot init\` to start one from the example`);
+    throw new Error(`${path} does not exist; start one from the example in the README`);
   }
   const config: unknown =
     extname(absolute) === '.json'
@@ -81,8 +82,11 @@ export const firebotApiUrl = (config?: ScenesConfig) =>
 export const configVariable = (config: ScenesConfig, flag?: string) =>
   flag ?? config.firebot?.variable ?? DEFAULT_CONFIG_VARIABLE;
 
-/** OBS scene collection file: `--collection`, `OBS_SCENE_COLLECTION`, or the config's collection (default "Untitled"). */
-export const obsSceneCollectionPath = (config?: ScenesConfig, flag?: string) =>
+/**
+ * OBS scene collection file: `--collection`, `OBS_SCENE_COLLECTION`, the collection OBS reported as active when it
+ * was asked, or the config's collection (default "Untitled").
+ */
+export const obsSceneCollectionPath = (config?: ScenesConfig, flag?: string, activeCollection?: string) =>
   flag ??
   process.env.OBS_SCENE_COLLECTION ??
   join(
@@ -90,8 +94,18 @@ export const obsSceneCollectionPath = (config?: ScenesConfig, flag?: string) =>
     'obs-studio',
     'basic',
     'scenes',
-    `${config?.obs?.sceneCollection ?? DEFAULT_SCENE_COLLECTION}.json`,
+    `${activeCollection ?? config?.obs?.sceneCollection ?? DEFAULT_SCENE_COLLECTION}.json`,
   );
+
+/** Ask a yes/no question on the terminal. `yes` answers it beforehand; without a terminal the answer is no. */
+export const confirm = async (question: string, yes = false) => {
+  if (yes) return true;
+  if (!process.stdin.isTTY) return false;
+  const prompt = createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await prompt.question(`${question} [y/N] `);
+  prompt.close();
+  return /^y(es)?$/i.test(answer.trim());
+};
 
 /** OBS connection: `OBS_WEBSOCKET_URL` / `OBS_WEBSOCKET_PASSWORD`, else the config, else Firebot's integration. */
 export const toolObsConnection = (config: ScenesConfig): ObsConnection => {

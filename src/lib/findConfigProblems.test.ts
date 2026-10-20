@@ -69,9 +69,36 @@ describe('findConfigProblems', () => {
       {
         severity: 'error',
         message:
-          'missing filters, run `obs-layout-firebot setup`: "Opacity" on "P1", "Move: Opacity" on "P1", "Move: CamBorder" on "P1", "Opacity" on "CamBorder", "Move: Opacity" on "CamBorder", "Move: Width" on "CamBorder", "Move: Height" on "CamBorder"',
+          'missing filters, run `obs-layout-firebot obs:deploy`: "Opacity" on "P1", "Move: Opacity" on "P1", "Move: CamBorder" on "P1", "Opacity" on "CamBorder", "Move: Opacity" on "CamBorder", "Move: Width" on "CamBorder", "Move: Height" on "CamBorder"',
       },
     ]);
+  });
+
+  describe('border color', () => {
+    const colored: ScenesConfig = { ...config, borderColor: { filter: 'Stroke' } };
+
+    it('requires the color move filter on every border that has the color filter', () => {
+      expect(messages(findConfigProblems(colored, inventory))).toEqual([
+        'missing filters, run `obs-layout-firebot obs:deploy`: "Move: Color" on "CamBorder"',
+      ]);
+      expect(
+        findConfigProblems(colored, {
+          ...inventory,
+          filters: { ...inventory.filters, CamBorder: [...inventory.filters.CamBorder, 'Move: Color'] },
+        }),
+      ).toEqual([]);
+    });
+
+    it('reports borders without the color filter itself, which setup cannot add', () => {
+      expect(
+        messages(
+          findConfigProblems(colored, {
+            ...inventory,
+            filters: { ...inventory.filters, CamBorder: ['Opacity', 'Move: Opacity', 'Move: Width', 'Move: Height'] },
+          }),
+        ),
+      ).toEqual(['borderColor.filter "Stroke" is missing on "CamBorder"; add it in OBS or change borderColor']);
+    });
   });
 
   it('warns about a font scale on a source that is not text, and says nothing when the kind is unknown', () => {

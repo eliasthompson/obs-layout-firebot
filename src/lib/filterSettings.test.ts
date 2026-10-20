@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { MoveStep } from '@/types/MoveStep';
 
 import {
+  colorMoveFilterSettings,
   intSettingFilterSettings,
   moveFilterSettings,
   moveTiming,
@@ -81,6 +82,21 @@ describe('intSettingFilterSettings', () => {
       value_type: 1,
       setting_int: 1452,
       ...moveTiming(300, 0),
+    });
+  });
+});
+
+describe('colorMoveFilterSettings', () => {
+  it('fades the border color filter setting to a color over the configured duration', () => {
+    expect(
+      colorMoveFilterSettings({ filter: 'Stroke', setting: 'stroke_fill_color', duration: 500 }, 0xff4a2e9b),
+    ).toEqual({
+      move_value_type: 0,
+      filter: 'Stroke',
+      setting_name: 'stroke_fill_color',
+      value_type: 3,
+      setting_color: 0xff4a2e9b,
+      ...moveTiming(500, 0),
     });
   });
 });

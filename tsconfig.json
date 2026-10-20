@@ -16,5 +16,5 @@
     "types": ["node"],
     "verbatimModuleSyntax": true
   },
-  "include": ["config", "eslint.config.ts", "src", "tools", "tsdown.config.ts", "vitest.config.ts"]
+  "include": ["eslint.config.ts", "src", "tools", "tsdown.config.ts", "vitest.config.ts"]
 }

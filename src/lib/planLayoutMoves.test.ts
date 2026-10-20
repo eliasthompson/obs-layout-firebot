@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ScenesConfig } from '@/types/ScenesConfig';
 
-import { shrinkRegion } from '@/lib/growRegion';
+import { growRegion, shrinkRegion } from '@/lib/growRegion';
 import { planLayoutMoves } from '@/lib/planLayoutMoves';
 
 const neverRegion = { x: -1, y: -1, width: -1, height: -1 };
@@ -32,10 +32,11 @@ const config: ScenesConfig = {
   scenes: {
     '16:9 1P': { participants: [{ layout: '[Layout] Person 1', config: { hasName: true } }] },
     'Camera 1P': {
-      participants: [{ layout: '[Layout] Person 1', config: { contentMainAspectRatio: null } }],
+      participants: [{ layout: '[Layout] Person 1', config: { contentMain: null } }],
       duration: 500,
     },
     '2P': { participants: [{ layout: '[Layout] Person 1' }, { layout: '[Layout] Person 2' }] },
+    Green: { participants: [{ layout: '[Layout] Person 1', config: { camera: { isGreenScreen: true } } }] },
   },
 };
 
@@ -75,7 +76,7 @@ describe('planLayoutMoves', () => {
   });
 
   it('insets a source inside its region while the border frames the whole region', () => {
-    const [metric] = generateLayout([{ hasName: true, infoAspectRatio: '65:16' }], options);
+    const [metric] = generateLayout([{ hasName: true, info: { aspectRatio: '65:16' } }], options);
     const inset: ScenesConfig = {
       ...config,
       participants: {
@@ -88,11 +89,11 @@ describe('planLayoutMoves', () => {
         },
       },
       // 250:49 is the ratio of the content inside the 12 px inset; the whole strip comes out at 65:16 (390x96)
-      scenes: { one: { participants: [{ layout: 'L', config: { hasName: true, infoAspectRatio: '250:49' } }] } },
+      scenes: { one: { participants: [{ layout: 'L', config: { hasName: true, info: { aspectRatio: '250:49' } } }] } },
     };
     const steps = planLayoutMoves(inset, 'one');
 
-    expect(metric.info).toEqual({ x: 1500, y: 135, width: 390, height: 96 });
+    expect(metric.info).toEqual({ x: 1500, y: 135, width: 390, height: 96, hasBorder: true });
     expect(steps.find((step) => step.source === 'info')).toMatchObject({
       region: { x: 1512, y: 147, width: 366, height: 72 },
     });
@@ -115,7 +116,7 @@ describe('planLayoutMoves', () => {
         L: { sources: { name: { source: 'name', inset: 12, fontScale: 0.45, fontSizeMin: 24, fontSizeMax: 48 } } },
       },
       scenes: {
-        tall: { participants: [{ layout: 'L', config: { contentMainAspectRatio: null, hasName: true } }] },
+        tall: { participants: [{ layout: 'L', config: { contentMain: null, hasName: true } }] },
         tiny: {
           participants: [{ layout: 'L', config: { hasName: true } }],
           options: { ...bare, canvasWidth: 480, canvasHeight: 270 },
@@ -126,7 +127,7 @@ describe('planLayoutMoves', () => {
         },
       },
     };
-    const [tallMetric] = generateLayout([{ contentMainAspectRatio: null, hasName: true }], {
+    const [tallMetric] = generateLayout([{ contentMain: null, hasName: true }], {
       ...options,
       nameHeightMin: 48,
     });
@@ -185,6 +186,23 @@ describe('planLayoutMoves', () => {
     expect(steps[6]).toMatchObject({ source: '[Border] Name 1', region: metric.name });
   });
 
+  it('moves a green screen camera border with the camera as if it framed it, but fades it out', () => {
+    const [metric] = generateLayout([{ camera: { isGreenScreen: true } }], options);
+    const steps = planLayoutMoves(config, 'Green');
+    const camera = steps.find((step) => step.source === '[Group] Camera 1');
+    const border = steps.find((step) => step.source === '[Border] Camera 1');
+
+    expect(metric.camera?.hasBorder).toBe(false);
+    expect(camera).toMatchObject({ region: metric.camera, visible: true });
+    expect(border).toMatchObject({
+      region: growRegion(metric.camera ?? neverRegion, 15),
+      size: { width: (metric.camera?.width ?? 0) + 12, height: (metric.camera?.height ?? 0) + 12 },
+      visible: false,
+    });
+    // The content border still frames its region
+    expect(steps.find((step) => step.source === '[Border] Content 1')).toMatchObject({ visible: true });
+  });
+
   it('sends unused regions to a 1x1 point at the canvas center, hidden, with the scene duration', () => {
     const steps = planLayoutMoves(config, 'Camera 1P');
     const content = steps.find((step) => step.source === '[Group] Content 1');
@@ -214,7 +232,7 @@ describe('planLayoutMoves', () => {
     const bare: ScenesConfig = {
       container: 'C',
       participants: { L: { sources: { camera: { source: 'cam', border: 'edge' } } } },
-      scenes: { only: { participants: [{ layout: 'L', config: { contentMainAspectRatio: null, hasCamera: false } }] } },
+      scenes: { only: { participants: [{ layout: 'L', config: { camera: null, contentMain: null } }] } },
     };
     const steps = planLayoutMoves(bare, 'only');
 
@@ -278,7 +296,7 @@ describe('planLayoutMoves standby', () => {
     },
     scenes: {
       '16:9': { participants: [{ layout: '[Layout] Person 1' }] },
-      camera: { participants: [{ layout: '[Layout] Person 1', config: { contentMainAspectRatio: null } }] },
+      camera: { participants: [{ layout: '[Layout] Person 1', config: { contentMain: null } }] },
       soon: {
         participants: [{ layout: '[Layout] Person 1' }],
         standby: {

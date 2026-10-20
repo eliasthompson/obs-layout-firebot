@@ -1,6 +1,6 @@
-import type { LayoutRegion } from '@eliasthompson/obs-layout-generator';
-
+import type { BorderColor } from '@/lib/resolveBorderColor';
 import type { MoveStep } from '@/types/MoveStep';
+import type { Rect } from '@/types/Rect';
 
 import { OPACITY_FILTER_NAME } from '@/constants/filterNames';
 import {
@@ -8,6 +8,7 @@ import {
   CHANGE_VISIBILITY_SHOW_START,
   EASE_IN_OUT,
   EASING_CUBIC,
+  MOVE_VALUE_COLOR,
   MOVE_VALUE_FLOAT,
   MOVE_VALUE_INT,
   MOVE_VALUE_TYPE_SINGLE_SETTING,
@@ -33,7 +34,7 @@ const changeVisibility = (step: MoveStep) => (step.visible ? CHANGE_VISIBILITY_S
  * Move Source filter settings that move a scene item to a rectangle. Values are absolute because no `_sign` keys are
  * set. Borders have no bounds, so only their position applies; their size moves through their own filters.
  */
-export const moveFilterSettings = (step: MoveStep, region: LayoutRegion) => ({
+export const moveFilterSettings = (step: MoveStep, region: Rect) => ({
   source: step.source,
   transform: true,
   pos: { x: region.x, y: region.y },
@@ -61,6 +62,20 @@ export const intSettingFilterSettings = (settingName: string, value: number, dur
   value_type: MOVE_VALUE_INT,
   setting_int: value,
   ...moveTiming(duration, delay),
+});
+
+/**
+ * Move Value filter settings fading a border's color: the color setting of the border color filter, to an OBS color
+ * (an integer in alpha, blue, green, red byte order), over the configured duration. What `obs:deploy` creates as
+ * `Move: Color` on every border, and what a program recoloring the borders writes before enabling the filter.
+ */
+export const colorMoveFilterSettings = ({ filter, setting, duration }: BorderColor, color: number) => ({
+  move_value_type: MOVE_VALUE_TYPE_SINGLE_SETTING,
+  filter,
+  setting_name: setting,
+  value_type: MOVE_VALUE_COLOR,
+  setting_color: color,
+  ...moveTiming(duration, 0),
 });
 
 /** Move Value filter settings animating the Opacity filter's `opacity` to 1 (shown) or 0 (hidden). */

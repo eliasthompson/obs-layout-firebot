@@ -1,6 +1,7 @@
-import type { LayoutConfig, LayoutMetric, LayoutOptions, LayoutRegion } from '@eliasthompson/obs-layout-generator';
+import type { LayoutConfig, LayoutMetric, LayoutOptions } from '@eliasthompson/obs-layout-generator';
 
 import type { ObsAlignment } from '@/constants/obsAlignment';
+import type { Rect } from '@/types/Rect';
 
 export type LayoutRegionName = keyof LayoutMetric;
 
@@ -28,6 +29,11 @@ export interface ParticipantPoolEntry {
 export interface SceneParticipant {
   /** Key in `participants`: the OBS scene that holds this participant's items, nested in the container. */
   layout: string;
+  /**
+   * The participant's regions, as obs-layout-generator takes them: a region config or `null` per region, and
+   * `hasName`. A green screen camera (`camera.isGreenScreen`) has no border; its border source still follows the
+   * camera as if it framed it, but fades out, and fades back in with the next layout that frames the camera.
+   */
   config?: LayoutConfig;
 }
 
@@ -35,7 +41,7 @@ export interface OverlayBinding {
   /** OBS source name of the item. */
   source: string;
   /** Where the item sits while shown, in canvas pixels. */
-  region: LayoutRegion;
+  region: Rect;
   /** Where the source sits inside its bounds when it does not fill them, as OBS names it. Left alone when omitted. */
   boundsAlignment?: ObsAlignment;
 }
@@ -72,8 +78,23 @@ export interface ObsConnection {
 }
 
 export interface ObsSettings extends Partial<ObsConnection> {
-  /** Tools only: the scene collection `fades` edits, by name. Default "Untitled". */
+  /** Tools only: the scene collection `obs:deploy` edits when OBS cannot say which one is active. Default "Untitled". */
   sceneCollection?: string;
+  /** Tools only: the OBS program, for `obs:restart` where the default install location does not apply. */
+  executable?: string;
+}
+
+/**
+ * The filter on every border color source that carries the border color, so another program can recolor the borders
+ * by writing that setting, and fade them through the `Move: Color` filter `obs:deploy` creates for it.
+ */
+export interface BorderColorSettings {
+  /** Filter name on each border, such as the Stroke filter of obs-stroke-glow-shadow. */
+  filter: string;
+  /** The filter's color setting. Default "stroke_fill_color", the Stroke filter's. */
+  setting?: string;
+  /** Milliseconds a color change fades over. Default 500. */
+  duration?: number;
 }
 
 /** Where the tools find Firebot. The script itself runs inside Firebot and ignores these. */
@@ -94,6 +115,8 @@ export interface ScenesConfig {
   options?: LayoutOptions;
   /** Pixels the border sources' filters add on every side; the color source is shrunk by this much. */
   borderPadding?: number;
+  /** The filter that colors the borders, when something else drives their color. */
+  borderColor?: BorderColorSettings;
   /** Move duration in milliseconds, used by scenes that do not set their own. */
   duration?: number;
   /** Every layout scene the installation knows, with its bound sources. */

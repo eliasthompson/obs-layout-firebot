@@ -1,17 +1,16 @@
-import type { LayoutRegion } from '@eliasthompson/obs-layout-generator';
-
 import { LAYOUT_OPTIONS_DEFAULT } from '@eliasthompson/obs-layout-generator';
 
 import type { SourceSize } from '@/types/MoveStep';
+import type { Rect } from '@/types/Rect';
 import type { ScenesConfig } from '@/types/ScenesConfig';
 
 import { growRegion } from '@/lib/growRegion';
 
 export interface StandbyLine {
   /** Where every region's content collapses to: no width, centered on the canvas, as tall as the line's inside. */
-  content: LayoutRegion;
+  content: Rect;
   /** The border box of a collapsed region, where a border item sits. */
-  border: LayoutRegion;
+  border: Rect;
   /** A collapsed border's color source: the line itself, two border rings wide. */
   size: SourceSize;
   /** Canvas x the standby text slides out from: the middle of the line, where the text scene is cropped. */

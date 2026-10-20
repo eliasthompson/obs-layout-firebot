@@ -1,7 +1,7 @@
 // Applies a scene key straight from this machine, the way the Firebot script does, then reads back every item's
 // position, size, visibility, and opacity and compares them with the plan.
 //
-//   obs-layout-firebot apply "<scene key>" [--config config/scenes.ts]
+//   obs-layout-firebot obs:verify "<scene key>" [--config config/scenes.ts]
 import { parseArgs } from 'node:util';
 
 import type { MoveStep } from '@/types/MoveStep';
@@ -12,14 +12,14 @@ import { runLayout } from '@/lib/runLayout';
 
 import { DEFAULT_CONFIG_PATH, loadConfig, sleep, toolObsConnection } from '../lib/environment';
 
-export const apply = async (args: string[]) => {
+export const obsVerify = async (args: string[]) => {
   const { positionals, values } = parseArgs({
     args,
     allowPositionals: true,
     options: { config: { type: 'string', default: DEFAULT_CONFIG_PATH } },
   });
   const [sceneKey = ''] = positionals;
-  if (!sceneKey) throw new Error('usage: obs-layout-firebot apply "<scene key>"');
+  if (!sceneKey) throw new Error('usage: obs-layout-firebot obs:verify "<scene key>"');
 
   const config = await loadConfig(values.config);
   const connection = toolObsConnection(config);

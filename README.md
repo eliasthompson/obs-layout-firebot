@@ -51,19 +51,19 @@ In a folder of your own (an existing project works too):
 
 ```sh
 npm install --save-dev @eliasthompson/obs-layout-firebot
-npx obs-layout-firebot init             # creates config/scenes.ts from the example
-# bind your OBS scenes and sources in config/scenes.ts, then:
-npx obs-layout-firebot setup            # creates the filters in OBS for every bound item (safe to rerun)
-npx obs-layout-firebot install-script   # copies the script into the Firebot profile's scripts folder
-npx obs-layout-firebot deploy           # checks the config against OBS, stores it in Firebot, adds the presets
+# describe your OBS scenes and sources in config/scenes.ts (see Config below), then:
+npx obs-layout-firebot obs:deploy       # creates the filters in OBS, then restarts OBS to set the item transitions
+npx obs-layout-firebot firebot:deploy   # checks the config against OBS, stores it in Firebot, installs the script and presets
 ```
 
-`deploy` ends by offering to restart Firebot, which loads the new script and presets. After that, each scene key is a
-preset effect list in Firebot that you can run from a command, a Stream Deck button, or anywhere else Firebot runs
-effects. `npx obs-layout-firebot apply "<scene key>"` applies one from the terminal and checks the result.
+Both deploys ask before restarting their program, and each is the one command to rerun after a change on its side.
+After that, each scene key is a preset effect list in Firebot that you can run from a command, a Stream Deck button,
+or anywhere else Firebot runs effects. `npx obs-layout-firebot obs:verify "<scene key>"` applies one from the terminal
+and checks the result.
 
-Keep `config/` out of version control if the folder is shared: it holds your scene names, possibly an OBS password,
-and the `preset-effect-lists.json` that `deploy` writes.
+`config/` is yours to version: the config holds scene and source names, and `preset-effect-lists.json`, which
+`firebot:deploy` writes, holds the ids that keep your presets stable across machines. Keep the OBS password out of the
+config (see [Machine settings](#machine-settings)) if the repository is shared.
 
 ## OBS setup
 
@@ -78,7 +78,7 @@ and the `preset-effect-lists.json` that `deploy` writes.
 - Scene items the script toggles should have **no** show/hide transition. `obs-layout-firebot fades` sets that, in the
   scene collection file, while OBS is closed.
 - For standby screens, a **standby text** scene in the container, below the participant layouts, holding one text
-  source per screen, and any standby widgets as items of the container. `setup` crops the text scene at the canvas
+  source per screen, and any standby widgets as items of the container. `obs:deploy` crops the text scene at the canvas
   center.
 
 ## Firebot setup
@@ -86,10 +86,10 @@ and the `preset-effect-lists.json` that `deploy` writes.
 - Settings, Integrations, OBS: enter the WebSocket address and password and connect. The script reads these same
   settings from the profile's `integrations.json`, so there is nothing else to configure.
 - **Run Custom Scripts** (Settings, Scripts) and **Persist Custom Variables** (Settings, Advanced) must be on;
-  `restart-firebot` turns both on for you. Without the second, the config is gone after a restart.
+  `firebot:restart` turns both on for you. Without the second, the config is gone after a restart.
 - Preset effect lists: one per scene key, each with a **Change OBS Scene** effect for the container scene and a
-  **Run Custom Script** effect running `obs-layout.js` with the `sceneKey` parameter set to the key. `deploy`
-  generates them and `restart-firebot` installs them into the profile.
+  **Run Custom Script** effect running `obs-layout.js` with the `sceneKey` parameter set to the key. `firebot:deploy`
+  generates them and `firebot:restart` installs them into the profile.
 
 Firebot's HTTP API cannot create preset lists, and Firebot caches a custom script once loaded, so both the presets
 and a new build need a Firebot restart to take effect.
@@ -97,31 +97,68 @@ and a new build need a Firebot restart to take effect.
 ## Config
 
 `config/scenes.ts` is the master config. It is a TypeScript module whose default export `satisfies ScenesConfig`, so
-your editor completes and checks every field as you type, and you can add comments or compute repetitive parts.
-`config/scenes.example.ts` is the full example that `init` copies.
+your editor completes and checks every field as you type, and you can add comments or compute repetitive parts. This
+is the complete example; copy it and bind your own scene and source names:
 
 ```ts
 import type { ScenesConfig } from '@eliasthompson/obs-layout-firebot';
 
 export default {
+  // OBS scene that holds one nested layout scene per participant
   container: '[Scene] Content',
+  // Canvas options of obs-layout-generator, for every scene
   options: { canvasPadding: 15, canvasMarginTop: 105, canvasMarginBottom: 105, regionBorder: 15 },
+  // Pixels the border sources' stroke and shadow filters add on every side
   borderPadding: 9,
+  // Optional: the filter on each border that carries its color, so another program can recolor the borders through
+  // the "Move: Color" filter obs:deploy adds for it; see Border colors
+  // borderColor: { filter: 'Stroke', duration: 500 },
+  // Move duration in milliseconds
   duration: 300,
+  // Every layout scene, with the OBS item (and border) that fills each region
   participants: {
     '[Layout] Person 1': {
       sources: {
         contentMain: { source: '[Group] Content 1', border: '[Border] Content 1' },
         camera: { source: '[Group] Camera 1', border: '[Border] Camera 1' },
+        name: { source: '[Text] Name 1', inset: 12, fontScale: 0.45, fontSizeMin: 24, fontSizeMax: 48 },
+      },
+    },
+    '[Layout] Person 2': {
+      sources: {
+        contentMain: { source: '[Group] Content 2', border: '[Border] Content 2' },
+        camera: { source: '[Group] Camera 2', border: '[Border] Camera 2' },
       },
     },
   },
+  // One preset per scene key: the participants it shows, in layout order, each with an optional layout config
   scenes: {
     '[Scene] 16:9 1P': { participants: [{ layout: '[Layout] Person 1' }] },
     '[Scene] Camera 1P': {
-      participants: [{ layout: '[Layout] Person 1', config: { contentMainAspectRatio: null } }],
+      participants: [{ layout: '[Layout] Person 1', config: { contentMain: null } }],
+    },
+    '[Scene] 4:3 2P': {
+      participants: [
+        { layout: '[Layout] Person 1', config: { contentMain: { aspectRatio: '4:3' } } },
+        { layout: '[Layout] Person 2', config: { contentMain: { aspectRatio: '4:3' } } },
+      ],
+      duration: 500,
+    },
+    // A green screen camera: no border, spreading over the gaps around it; its border source fades out
+    '[Scene] Green Screen 1P': {
+      participants: [{ layout: '[Layout] Person 1', config: { camera: { isGreenScreen: true } } }],
+    },
+    // A standby screen: the regions collapse into a line at the canvas center and the text slides out from behind it
+    '[Standby] Starting Soon': {
+      participants: [{ layout: '[Layout] Person 1' }],
+      standby: { text: { source: '[Text] Starting Soon', region: { x: 1000, y: 480, width: 700, height: 120 } } },
     },
   },
+  // The scene in the container that holds the standby texts, and the height of the standby line
+  standby: { textScene: '[Widget] Standby Text', lineHeight: 540 },
+  // Optional: where the tools find OBS and Firebot when the defaults do not fit this machine; see Machine settings
+  // obs: { sceneCollection: 'Untitled', executable: 'C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe' },
+  // firebot: { profile: 'Main', apiUrl: 'http://localhost:7472/api/v1', variable: 'layoutScenes' },
 } satisfies ScenesConfig;
 ```
 
@@ -130,6 +167,7 @@ export default {
 | `container`     | OBS scene whose items are the participant layout scenes.                                                      |
 | `options`       | `LayoutOptions` for the canvas, as in obs-layout-generator.                                                   |
 | `borderPadding` | Pixels the border sources' filters add on every side. Default `0`.                                            |
+| `borderColor`   | The filter on each border that carries its color, for recoloring; see [Border colors](#border-colors).        |
 | `duration`      | Move duration in milliseconds. Default `300`.                                                                 |
 | `participants`  | Every layout scene the installation knows, keyed by scene name, with the source (and border) for each region. |
 | `scenes`        | Compositions by scene key: the participants shown, in layout order, each with an optional `LayoutConfig`.     |
@@ -144,14 +182,41 @@ Region names are those of `LayoutMetric`: `contentMain`,
 that should not touch the frame; a ratio declared for an inset region holds for the area inside the inset, so a
 `250:49` info strip with a 12 px inset shows 366x72 of content inside a 390x96 region), an optional `boundsAlignment`
 (where the source sits inside its bounds when it does not fill them, named as in OBS's transform dialog, such as
-`top center`), which `setup` applies, and for text sources an optional `fontScale`: the font size as a fraction of the
+`top center`), which `obs:deploy` applies, and for text sources an optional `fontScale`: the font size as a fraction of the
 source's height after the inset, set on every move so the text grows with its region. The font stays at `fontSizeMax`
 while the text fits and sizes down to `fontSizeMin` when the region is too short; `0.45` reproduces a 48 px font in a
 106 px name strip. When a name binding has `fontSizeMin`, the layout is asked for a name at least
 `inset × 2 + fontSizeMin` tall unless the options already set `nameHeightMin`.
 
+A participant's `config` is a `LayoutConfig` as obs-layout-generator 2 takes it: `contentMain`, `camera`, `contentAux`,
+and `info` each take a region config such as `{ aspectRatio: '4:3' }` or `null` to turn the region off, and `hasName`
+adds the name tag. A side region attached to the main region (`isMainAttached`) or to the region above it
+(`isAboveAttached`) shares that neighbor's border, so the two border sources overlap on the same pixels there. A green
+screen camera (`camera: { isGreenScreen: true }`) has no border and spreads over the gaps around it; its border source
+still moves and sizes as if it framed the camera, so the two stay in step, but fades out, and fades back in with the
+next layout that frames the camera.
+
 The config is stored in a Firebot variable as JSON, so it has to stay plain data: no functions, dates, or class
 instances. A `.js` or `.json` file works too; pass it with `--config`.
+
+### Border colors
+
+The script never colors a border; that is the border source's own filters, such as the Stroke filter of
+[obs-stroke-glow-shadow](https://github.com/FiniteSingularity/obs-stroke-glow-shadow). With a `borderColor` entry,
+another program can recolor the borders, for example to match each participant's chat color:
+
+```ts
+borderColor: { filter: 'Stroke', setting: 'stroke_fill_color', duration: 500 },
+```
+
+`filter` is the filter's name on every border, `setting` its color setting (default `stroke_fill_color`, the Stroke
+filter's), and `duration` how long a color change fades, in milliseconds (default `500`). `obs:deploy` then adds a
+`Move: Color` Move Value filter to every border that has the color filter, pointed at that setting, and
+`firebot:deploy` reports borders without the color filter, which it cannot add for you. To recolor a border, write
+the new color into the `Move: Color` filter's `setting_color` and enable the filter, and it fades there; a program
+that finds no `Move: Color` filter can write the color filter's setting directly instead, which snaps. OBS colors are
+integers in alpha, blue, green, red byte order, so `#rrggbb` becomes `0xffbbggrr`. The stroke has to be in color fill
+mode for its color to show. The transitions never touch this filter, so a recolor and a layout change can overlap.
 
 ### Standby screens
 
@@ -189,8 +254,8 @@ The transition runs in stages, each one `duration` long:
   shown (the region obs-layout-generator puts in the main column: main content, else camera, else aux content, else
   info), so their shadows do not stack. Leaving standby for a layout whose main region is another one, that border
   takes over the line in a single frame before the regions grow out.
-- **The text** is an item of `textScene`, which `setup` crops at the canvas center, so text slides out from behind the
-  line without fading. Its region is the bounding box: `setup` makes every standby text cover it (Scale to outer
+- **The text** is an item of `textScene`, which `obs:deploy` crops at the canvas center, so text slides out from behind the
+  line without fading. Its region is the bounding box: `obs:deploy` makes every standby text cover it (Scale to outer
   bounds), aligned center left, so text relatively wider than the box runs past its right edge. Hidden text waits at
   its region's height just left of the cut, by its rendered width, overflow included. Put `textScene` below the
   participant layouts in the container, so the line covers the cut. Each screen has its own text source; a scene that
@@ -212,7 +277,8 @@ else the default.
 | `firebot.apiUrl`      | `FIREBOT_API_URL`        |                 | `http://localhost:7472/api/v1`                           |
 | `firebot.variable`    |                          | `--variable`    | `layoutScenes`                                           |
 | `firebot.executable`  |                          |                 | The standard install (Windows, macOS); required on Linux |
-| `obs.sceneCollection` | `OBS_SCENE_COLLECTION`   | `--collection`  | `Untitled`, under OBS's data folder                      |
+| `obs.sceneCollection` | `OBS_SCENE_COLLECTION`   | `--collection`  | The collection OBS reports as active, else `Untitled`    |
+| `obs.executable`      |                          |                 | The standard install (Windows, macOS, Linux package)     |
 | `obs.url`             | `OBS_WEBSOCKET_URL`      |                 | Firebot's OBS integration, else `ws://localhost:4455`    |
 | `obs.password`        | `OBS_WEBSOCKET_PASSWORD` |                 | Firebot's OBS integration, else none                     |
 
@@ -223,50 +289,75 @@ of the profile folder and the collection file. The data folders are `%APPDATA%` 
 
 ## Commands
 
-Run as `npx obs-layout-firebot <command>`. Every command that reads the config takes `--config <path>` (default
-`config/scenes.ts`).
+Run as `npx obs-layout-firebot <command>`. Commands are grouped by the program they act on. Every command that reads
+the config takes `--config <path>` (default `config/scenes.ts`); every command that changes something takes
+`--dry-run` to report what it would do instead, and `--yes` to skip its questions.
 
-| Command           | What it does                                                                                                                      |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `init`            | Creates `config/scenes.ts` from the example. Never overwrites.                                                                    |
-| `setup`           | Creates or updates, disabled, every filter the script drives, gives region items a bounds type, and crops the standby text scene. |
-| `install-script`  | Copies `obs-layout.js` into the profile's `scripts` folder. Restart Firebot afterwards.                                           |
-| `deploy`          | Checks, stores, and syncs the presets; see below. `--skip-obs`, `--yes`, `--no-restart`, `--presets`.                             |
-| `restart-firebot` | Stops Firebot, installs the presets, turns on the two settings above, and starts Firebot again.                                   |
-| `apply`           | `apply "<scene key>"`: applies a scene from this machine and compares every item with the plan.                                   |
-| `capture`         | `capture "<scene key>" --save frames/`: screenshots during a transition, or white-pixel counts without it.                        |
-| `fades`           | Sets the toggled scene items' show/hide transitions in the scene collection file. OBS must be closed.                             |
+| Command           | What it does                                                                                                                |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `obs:deploy`      | Sets OBS up for the config, then asks to restart OBS around setting the item transitions; see below. `--no-restart`.        |
+| `obs:restart`     | Restarts OBS, never forcibly, after checking that it is not streaming or recording.                                         |
+| `obs:verify`      | `obs:verify "<scene key>"`: applies a scene from this machine and compares every item with the plan; exits 1 on a mismatch. |
+| `obs:capture`     | `obs:capture "<scene key>" --save frames/`: screenshots during a transition, or white-pixel counts without it.              |
+| `firebot:deploy`  | Checks, stores, syncs the presets, installs the script, and asks to restart; see below. `--skip-obs`, `--no-restart`.       |
+| `firebot:restart` | Restarts Firebot, never forcibly, around installing the presets and turning on the two settings above.                      |
 
-`restart-firebot` closes Firebot the way closing its window would and forces it after 60 seconds. While you are live
-with chat connected, Firebot asks before closing; answer it, or the close is forced. A forced close skips Firebot's
-save of its custom variables, so `deploy` stores the config again once Firebot is back (after a standalone
-`restart-firebot`, run `deploy` yourself). It backs up every profile file it replaces next to it, with a timestamp.
+Version 2 grouped and reduced the commands: `setup` and `fades` became steps of `obs:deploy`, `install-script` a step
+of `firebot:deploy`, `apply` is `obs:verify`, and `init` is gone in favor of the example above.
+
+### Restarts
+
+Neither program is ever closed forcibly: OBS and Firebot write their files on the way out, and a forced stop loses
+them. A restart asks first, then closes the program the way its window would be closed and waits for it to exit,
+up to a minute, because both ask before closing while live: Firebot with chat connected, OBS while streaming or
+recording. OBS is never closed while it reports either; `obs:deploy` and `obs:restart` check over the websocket.
+
+When the program cannot be closed from here, most often because it runs as administrator and the terminal does not,
+or when it has not closed in time, the tool asks you to close it and waits until it is gone. It then does its file
+work and leaves starting the program to you as well, since a program started from a plain terminal would come back
+without the rights it had. A program that was not running is started afterwards. Every profile or collection file
+that is replaced is backed up next to it, with a timestamp.
+
+### Deploying a change in OBS
+
+`obs:deploy` is the one step for changes on the OBS side, such as new sources, renamed items, or a new participant:
+
+1. It runs the setup over the websocket: filters created or updated, bounds types set, stale Move Source filters
+   removed, the standby text scene cropped. This part is idempotent and is all that runs without the restart.
+2. It asks which scene collection OBS has loaded, and whether OBS is streaming or recording.
+3. It asks to restart OBS, and around that restart sets every toggled item's show and hide transition in the
+   collection file, which only that file holds and OBS only reads at startup. OBS saves the collection on exit, so
+   the setup's filters are in the file before it is edited. `--transition none|fade` and `--duration` set what the
+   items get (default `none`, `300`). `--no-restart`, or declining, leaves the restart for a later `obs:deploy`.
 
 ### Deploying a config change
 
-`deploy` is the one step for config changes:
+`firebot:deploy` is the one step for config changes:
 
 1. It reads every bound scene, item, and filter back from OBS and refuses to deploy when something is missing, so a
-   typo in a source name is caught before a preset ever fails. Missing filters point at `setup`. Pass `--skip-obs` to
-   deploy with OBS closed.
+   typo in a source name is caught before a preset ever fails. Missing filters point at `obs:deploy`. It waits for OBS
+   to be started when it is not running; pass `--skip-obs` to deploy without it.
 2. It stores the config in the `layoutScenes` variable (or `firebot.variable`). The next preset run uses it; nothing
    needs a restart.
 3. It makes `config/preset-effect-lists.json` match the scene keys: a preset is added for every new key and removed
-   for every key that is gone, and existing presets keep their ids. When Firebot's loaded presets differ from that
-   file, it asks in the terminal whether to restart Firebot now. `--yes` answers for you, `--no-restart` skips the
-   question.
+   for every key that is gone, and existing presets keep their ids.
+4. It installs the built script into the profile when it differs from the installed one.
+5. When Firebot's loaded presets differ from the file, or the script changed, it asks whether to restart Firebot now,
+   installs the presets and settings into the profile while Firebot is closed, and waits for Firebot to come back
+   with the right presets.
 
-Firebot only reads presets at startup, which is why adding or removing scene keys ends in a restart. The presets file
-owns the layout presets: the restart replaces the profile's layout presets with it and keeps any other presets you
-made in Firebot. Deleting a layout preset in Firebot's UI does not stick; remove its scene key from the config instead.
+Firebot only reads presets and scripts at startup, which is why adding or removing scene keys, or a new build, ends
+in a restart. The presets file owns the layout presets: the restart replaces the profile's layout presets with it and
+keeps any other presets you made in Firebot. Deleting a layout preset in Firebot's UI does not stick; remove its scene
+key from the config instead.
 
 ## Adding compositions
 
 - **Another layout for the same participant**: add a scene key with a different `config`. New regions need a source
-  bound in the participant's pool entry; run `setup` once for new sources.
+  bound in the participant's pool entry; run `obs:deploy` once for new sources.
 - **Another participant**: build a second layout scene in OBS like the first, add it to `participants`, and list it
   in the scenes that show it. The library splits participants into balanced rows.
-- Then `deploy`, which adds the preset for the new key and offers the restart.
+- Then `firebot:deploy`, which adds the preset for the new key and offers the restart.
 
 ## Development
 

@@ -1,7 +1,7 @@
 // Applies a scene key while sampling screenshots of a source, to look at a transition frame by frame. Without
 // --save it reports near-white pixel counts per frame (handy for spotting flashes); with --save it writes PNG frames.
 //
-//   obs-layout-firebot capture "<scene key>" [--source "[Scene] Content"] [--save frames/]
+//   obs-layout-firebot obs:capture "<scene key>" [--source "[Scene] Content"] [--save frames/]
 //     [--watch-input "[Border] Camera 1"] [--disable-filters Stroke,Shadow] [--config config/scenes.ts]
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -34,7 +34,7 @@ const analyzeBmp = (buffer: Buffer) => {
 
 const imageBytes = (imageData: string) => Buffer.from(imageData.replace(/^data:image\/\w+;base64,/, ''), 'base64');
 
-export const capture = async (args: string[]) => {
+export const obsCapture = async (args: string[]) => {
   const { positionals, values } = parseArgs({
     args,
     allowPositionals: true,
@@ -47,7 +47,7 @@ export const capture = async (args: string[]) => {
     },
   });
   const [sceneKey = ''] = positionals;
-  if (!sceneKey) throw new Error('usage: obs-layout-firebot capture "<scene key>"');
+  if (!sceneKey) throw new Error('usage: obs-layout-firebot obs:capture "<scene key>"');
 
   const config = await loadConfig(values.config);
   const connection = toolObsConnection(config);

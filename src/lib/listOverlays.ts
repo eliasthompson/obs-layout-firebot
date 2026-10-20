@@ -1,6 +1,5 @@
-import type { LayoutRegion } from '@eliasthompson/obs-layout-generator';
-
 import type { Binding } from '@/types/MoveStep';
+import type { Rect } from '@/types/Rect';
 import type { OverlayBinding, ScenesConfig } from '@/types/ScenesConfig';
 
 import { OBS_ALIGNMENT_FLAGS, STANDBY_TEXT_ALIGNMENT } from '@/constants/obsAlignment';
@@ -8,7 +7,7 @@ import { OBS_ALIGNMENT_FLAGS, STANDBY_TEXT_ALIGNMENT } from '@/constants/obsAlig
 export interface Overlay {
   binding: Binding & { kind: 'text' | 'widget' };
   /** Where the item sits while shown, from the first scene that uses it. */
-  region: LayoutRegion;
+  region: Rect;
 }
 
 /**

@@ -7,6 +7,11 @@ export const WIDTH_FILTER_NAME = 'Move: Width';
 export const HEIGHT_FILTER_NAME = 'Move: Height';
 export const OPACITY_FILTER_NAME = 'Opacity';
 export const OPACITY_MOVE_FILTER_NAME = 'Move: Opacity';
+/** On border color sources with a `borderColor` config: fades the border color through the configured filter. */
+export const COLOR_MOVE_FILTER_NAME = 'Move: Color';
+/** The color setting of the Stroke filter of obs-stroke-glow-shadow, the usual border color filter. */
+export const DEFAULT_BORDER_COLOR_SETTING = 'stroke_fill_color';
+export const DEFAULT_BORDER_COLOR_DURATION = 500;
 /** Frames to wait between writing the filters and enabling them, so OBS has applied the deferred settings updates. */
 export const SETTLE_FRAMES = 2;
 /**

@@ -11,7 +11,7 @@ const config = {
   container: 'C',
   participants: { L: { sources: { camera: { source: 'cam' } } } },
   // No main content, so the camera takes the main column and is shown on a default canvas
-  scenes: { only: { participants: [{ layout: 'L', config: { contentMainAspectRatio: null } }] } },
+  scenes: { only: { participants: [{ layout: 'L', config: { contentMain: null } }] } },
 };
 const integrations = JSON.stringify({ OBS: { userSettings: { websocketSettings: { port: 4455, password: 'pw' } } } });
 

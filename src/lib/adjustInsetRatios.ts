@@ -1,23 +1,20 @@
-import type { AspectRatio, LayoutConfig, LayoutMetric } from '@eliasthompson/obs-layout-generator';
+import type { AspectRatio, ContentAspectRatio, LayoutConfig, LayoutMetric } from '@eliasthompson/obs-layout-generator';
 
 import { transformAspectRatio } from '@eliasthompson/obs-layout-generator';
 
 import type { LayoutRegionName } from '@/types/ScenesConfig';
 
-/** The config field that sets each region's ratio. The name has none, and the camera's only counts in the main column. */
-const RATIO_FIELDS = {
-  contentMain: 'contentMainAspectRatio',
-  contentAux: 'contentAuxAspectRatio',
-  info: 'infoAspectRatio',
-  camera: 'cameraMainAspectRatio',
-} as const satisfies Partial<Record<LayoutRegionName, keyof LayoutConfig>>;
+/** Regions whose config declares a ratio. The name has none, and the camera's only counts in the main column. */
+const RATIO_REGIONS = ['contentMain', 'contentAux', 'info', 'camera'] as const satisfies readonly LayoutRegionName[];
+
+type RatioRegion = (typeof RATIO_REGIONS)[number];
 
 /** Insets per region for one participant, in pixels. */
 export type RegionInsets = Partial<Record<LayoutRegionName, number>>;
 
 interface Target {
   participant: number;
-  region: keyof typeof RATIO_FIELDS;
+  region: RatioRegion;
   inset: number;
   /** The declared ratio, which must hold inside the inset. */
   wanted: number;
@@ -25,13 +22,35 @@ interface Target {
   outer: number;
 }
 
-const declaredRatio = (config: LayoutConfig, region: keyof typeof RATIO_FIELDS): number | undefined => {
-  const value = config[RATIO_FIELDS[region]];
-  if (typeof value !== 'string' || value === 'auto') return undefined;
+/** The ratio a region declares, or `undefined` for a region that is off, left at its default, `'auto'`, or invalid. */
+const declaredRatio = (config: LayoutConfig, region: RatioRegion): number | undefined => {
   // A camera ratio only shapes the camera when it takes the main column, which happens without main content
-  if (region === 'camera' && config.contentMainAspectRatio !== null) return undefined;
+  const value =
+    region === 'camera'
+      ? config.contentMain === null
+        ? config.camera?.mainAspectRatio
+        : undefined
+      : config[region]?.aspectRatio;
+  if (typeof value !== 'string' || value === 'auto') return undefined;
   const ratio = transformAspectRatio(value);
   return ratio > 0 ? ratio : undefined;
+};
+
+/**
+ * The config with one region's ratio replaced. The library computes from any `width:height` string; the content
+ * ratio type only lists the usual ones, so the adjusted value is widened into it.
+ */
+const withRatio = (config: LayoutConfig, region: RatioRegion, ratio: AspectRatio): LayoutConfig => {
+  switch (region) {
+    case 'camera':
+      return { ...config, camera: { ...config.camera, mainAspectRatio: ratio } };
+    case 'contentAux':
+      return { ...config, contentAux: { ...config.contentAux, aspectRatio: ratio as ContentAspectRatio } };
+    case 'contentMain':
+      return { ...config, contentMain: { ...config.contentMain, aspectRatio: ratio as ContentAspectRatio } };
+    case 'info':
+      return { ...config, info: { ...config.info, aspectRatio: ratio } };
+  }
 };
 
 /**
@@ -53,7 +72,7 @@ export const adjustInsetRatios = (
   maxPasses = 8,
 ): LayoutConfig[] => {
   const targets = configs.flatMap((config, participant) =>
-    (Object.keys(RATIO_FIELDS) as (keyof typeof RATIO_FIELDS)[]).flatMap((region): Target[] => {
+    RATIO_REGIONS.flatMap((region): Target[] => {
       const inset = insets[participant]?.[region] ?? 0;
       const wanted = declaredRatio(config, region);
       return inset > 0 && wanted !== undefined ? [{ participant, region, inset, wanted, outer: wanted }] : [];
@@ -77,10 +96,11 @@ export const adjustInsetRatios = (
       // Too wide inside means the region needs to be taller, so its outer ratio shrinks, and the other way round
       settled = false;
       target.outer *= target.wanted / (innerWidth / innerHeight);
-      adjusted[target.participant] = {
-        ...adjusted[target.participant],
-        [RATIO_FIELDS[target.region]]: `${target.outer.toFixed(6)}:1` as AspectRatio,
-      };
+      adjusted[target.participant] = withRatio(
+        adjusted[target.participant],
+        target.region,
+        `${target.outer.toFixed(6)}:1` as AspectRatio,
+      );
     }
 
     if (settled) break;

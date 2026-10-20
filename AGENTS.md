@@ -12,8 +12,9 @@ Firebot custom script, plus the `obs-layout-firebot` CLI to install and operate 
 - `npm run test` / `npm run test:coverage` / `npm run test:watch`: Vitest
 - `npm run build`: tsdown, emits `dist/obs-layout.js` (the Firebot script, one CommonJS file with the library bundled
   in), `dist/index.js` and `dist/index.d.ts` (the library and config types), and `dist/cli.js` (the CLI)
-- `npm run init`, `setup`, `install-script`, `deploy`, `restart-firebot`, `apply`, `capture`, `fades`: the CLI's
-  commands run from source with `tsx` (`tsx tools/cli.ts <command>`). See README.md
+- `npm run obs:deploy`, `obs:restart`, `obs:verify`, `obs:capture`, `firebot:deploy`, `firebot:restart`: the CLI's
+  commands run from source with `tsx` (`tsx tools/cli.ts <command>`). Commands are grouped by the program they act
+  on, and each deploy is the one command for its side; the steps it is made of live in `tools/lib`. See README.md
 
 Before finishing a change, run typecheck, lint, format check, test coverage, and build. All five must pass.
 
@@ -27,13 +28,16 @@ Before finishing a change, run typecheck, lint, format check, test coverage, and
 - `src/lib/*.test.ts`: one test file beside each lib file. Coverage of `src/lib` is held at 100% for statements,
   branches, functions, and lines; code that tests cannot reach should be restructured (inject the socket, the file
   reader, the clock) rather than excluded.
-- `tools/cli.ts`: the CLI entry, dispatching to `tools/commands/<command>.ts`, each exporting a function that takes
-  the arguments after the command name. `tools/lib/` holds what the commands share: paths and settings
-  (`environment.ts`) and process control (`processes.ts`). Tools import from `@/` like the source and are typechecked
-  and linted, but have no tests, so logic worth testing (preset syncing, settings merging) belongs in `src/lib`.
-- `config/scenes.example.ts`: the example config, shipped in the package and copied by `obs-layout-firebot init`.
-  Everything else in `config/` is per-user and git-ignored: `scenes.ts` (the live config) and
-  `preset-effect-lists.json` (written by `deploy`).
+- `tools/cli.ts`: the CLI entry, dispatching to `tools/commands/<group><Command>.ts` (`obsDeploy.ts` for
+  `obs:deploy`), each exporting a function that takes the arguments after the command name. `tools/lib/` holds the
+  steps and what the commands share: the OBS setup (`setup.ts`), the item transitions in the collection file
+  (`fades.ts`), the script install (`installScript.ts`), paths, settings, and prompts (`environment.ts`), process
+  control (`processes.ts`), the two apps' process names and launchers (`apps.ts`), and OBS-side questions such as
+  whether it is live (`obs.ts`). Tools import from `@/` like the source and are typechecked and linted, but have no
+  tests, so logic worth testing (preset syncing, settings merging) belongs in `src/lib`.
+- There is no config in this repo: the example lives in README.md, and a user's config lives in their own project,
+  where `firebot:deploy` also writes `preset-effect-lists.json`. `config/` is git-ignored so a local config can sit
+  here for development, for example one that re-exports the config of a sibling checkout.
 - `dist/`: build output, git-ignored. Never edit it.
 
 ## Conventions
@@ -43,7 +47,8 @@ Before finishing a change, run typecheck, lint, format check, test coverage, and
 - In config files (tsconfig, tsdown, ESLint, Prettier, package.json `scripts`), keep keys alphabetical and do not add
   comments.
 - Configs are TypeScript modules whose default export `satisfies ScenesConfig`, with a type-only import so they need
-  nothing from the package at runtime. The CLI loads them with jiti, not Node's type stripping, which reads `.ts` in a
+  nothing from the package at runtime. Keep the README example complete and in step with `ScenesConfig`; it is the
+  only example. The CLI loads them with jiti, not Node's type stripping, which reads `.ts` in a
   CommonJS package as CommonJS and fails on `export default`. `.js` and `.json` configs load too. A config is stored
   in a Firebot variable, so it must stay plain JSON data.
 - Tool settings resolve as command-line option, then environment variable, then the config's `firebot` / `obs`
@@ -54,6 +59,11 @@ Before finishing a change, run typecheck, lint, format check, test coverage, and
   use a Move Value filter in its "settings" mode on a color source: it rewrites the color.
 - Changes to the request batch order (disable, write, sleep, enable) need a reason in a comment; the order works
   around OBS deferring filter updates to the next video tick.
+- The tools never force a process to exit. OBS and Firebot write their files on the way out, and both may be running
+  as administrator, which this tool cannot close. `restartApp` in `processes.ts` asks the user to close such an app
+  and waits, then leaves starting it to the user too, so the app keeps the rights it had. Route every restart through
+  it, and never close OBS while it reports streaming or recording.
+- A command that writes to OBS, a file, or Firebot takes `--dry-run` and reports what it would do instead.
 - Firebot caches a custom script once loaded. After installing a new build, restart Firebot.
 - The minimum OBS, obs-websocket, Move Transition, and Firebot versions are listed in README.md. Using a request,
   filter setting, or Firebot API that raises one of them means updating that list.

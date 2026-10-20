@@ -15,3 +15,4 @@ export const MOVE_VALUE_TYPE_SINGLE_SETTING = 0;
 /** `value_type` of a Move Value filter. */
 export const MOVE_VALUE_INT = 1;
 export const MOVE_VALUE_FLOAT = 2;
+export const MOVE_VALUE_COLOR = 3;

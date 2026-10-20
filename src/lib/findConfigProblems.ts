@@ -4,6 +4,7 @@ import type { ConfigProblem, ObsInventory } from '@/types/ObsInventory';
 import type { ScenesConfig } from '@/types/ScenesConfig';
 
 import {
+  COLOR_MOVE_FILTER_NAME,
   HEIGHT_FILTER_NAME,
   OPACITY_FILTER_NAME,
   OPACITY_MOVE_FILTER_NAME,
@@ -12,8 +13,9 @@ import {
 import { listBindings } from '@/lib/listBindings';
 import { listOverlays } from '@/lib/listOverlays';
 import { moveFilterName } from '@/lib/moveFilterName';
+import { resolveBorderColor } from '@/lib/resolveBorderColor';
 
-const SETUP_HINT = 'run `obs-layout-firebot setup`';
+const SETUP_HINT = 'run `obs-layout-firebot obs:deploy`';
 
 /**
  * Everything in a config that would make a preset fail or misbehave, checked against what OBS has: missing scenes,
@@ -88,8 +90,19 @@ export const findConfigProblems = (config: ScenesConfig, inventory: ObsInventory
     }
   }
 
-  const missingFilters = listBindings(config).flatMap(({ scene, source, kind }) => {
-    if (!hasScene(scene) || !hasItem(scene, source)) return [];
+  // The border color filter is the user's own; setup only adds the Move Value filter that fades it
+  const borderColor = resolveBorderColor(config);
+  const bindings = listBindings(config).filter(({ scene, source }) => hasScene(scene) && hasItem(scene, source));
+  const missingColorFilters = bindings.flatMap(({ source, kind }) =>
+    borderColor && kind === 'border' && !hasFilter(source, borderColor.filter) ? [`"${source}"`] : [],
+  );
+  if (borderColor && missingColorFilters.length) {
+    error(
+      `borderColor.filter "${borderColor.filter}" is missing on ${missingColorFilters.join(', ')}; add it in OBS or change borderColor`,
+    );
+  }
+
+  const missingFilters = bindings.flatMap(({ scene, source, kind }) => {
     const wanted = [
       [scene, moveFilterName(source)],
       // Standby text never fades
@@ -103,6 +116,7 @@ export const findConfigProblems = (config: ScenesConfig, inventory: ObsInventory
         ? [
             [source, WIDTH_FILTER_NAME],
             [source, HEIGHT_FILTER_NAME],
+            ...(borderColor && hasFilter(source, borderColor.filter) ? [[source, COLOR_MOVE_FILTER_NAME]] : []),
           ]
         : []),
     ];

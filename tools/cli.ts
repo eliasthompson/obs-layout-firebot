@@ -1,35 +1,42 @@
 #!/usr/bin/env node
-// The obs-layout-firebot command: the tools that set up OBS, deploy a config to Firebot, and install the script. Each
-// command lives in tools/commands and gets the arguments after its name.
-import { apply } from './commands/apply';
-import { capture } from './commands/capture';
-import { deploy } from './commands/deploy';
-import { fades } from './commands/fades';
-import { init } from './commands/init';
-import { installScript } from './commands/installScript';
-import { restartFirebotCommand } from './commands/restartFirebot';
-import { setup } from './commands/setup';
+// The obs-layout-firebot command: the tools that set OBS up and deploy a config to Firebot. Each command lives in
+// tools/commands and gets the arguments after its name. Commands are grouped by the program they act on: `obs:`
+// commands talk to OBS, `firebot:` commands to Firebot.
+import { firebotDeploy } from './commands/firebotDeploy';
+import { firebotRestart } from './commands/firebotRestart';
+import { obsCapture } from './commands/obsCapture';
+import { obsDeploy } from './commands/obsDeploy';
+import { obsRestart } from './commands/obsRestart';
+import { obsVerify } from './commands/obsVerify';
 
-const COMMANDS: Record<string, { run: (args: string[]) => Promise<void> | void; summary: string }> = {
-  init: { run: init, summary: 'start config/scenes.ts from the example' },
-  setup: { run: setup, summary: 'create the filters in OBS for every bound item (safe to rerun)' },
-  'install-script': { run: installScript, summary: "copy the script into the Firebot profile's scripts folder" },
-  deploy: { run: deploy, summary: 'check the config against OBS, store it in Firebot, and sync the presets' },
-  'restart-firebot': {
-    run: restartFirebotCommand,
-    summary: 'install the presets into the profile and restart Firebot',
+interface Command {
+  run: (args: string[]) => Promise<void> | void;
+  summary: string;
+}
+
+const COMMANDS: Record<string, Command> = {
+  'obs:deploy': {
+    run: obsDeploy,
+    summary: 'set OBS up for the config, then restart it to set the item transitions (asks first)',
   },
-  apply: { run: apply, summary: 'apply a scene key from this machine and verify the result' },
-  capture: { run: capture, summary: 'sample screenshots during a transition' },
-  fades: { run: fades, summary: "set the scene items' show/hide transitions (OBS must be closed)" },
+  'obs:restart': { run: obsRestart, summary: 'restart OBS, never forcibly' },
+  'obs:verify': { run: obsVerify, summary: 'apply a scene key from this machine and compare the result with the plan' },
+  'obs:capture': { run: obsCapture, summary: 'sample screenshots during a transition' },
+  'firebot:deploy': {
+    run: firebotDeploy,
+    summary:
+      'check the config against OBS, store it in Firebot, sync the presets and the script (asks before a restart)',
+  },
+  'firebot:restart': { run: firebotRestart, summary: 'install the presets into the profile and restart Firebot' },
 };
 
 const usage = () =>
   [
     'usage: obs-layout-firebot <command> [options]',
     '',
-    ...Object.entries(COMMANDS).map(([name, { summary }]) => `  ${name.padEnd(16)} ${summary}`),
+    ...Object.entries(COMMANDS).map(([name, { summary }]) => `  ${name.padEnd(18)} ${summary}`),
     '',
+    'Every command that changes something takes --dry-run where it applies, and --yes to skip its questions.',
     "See the README for each command's options.",
   ].join('\n');
 
