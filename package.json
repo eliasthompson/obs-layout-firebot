@@ -69,6 +69,7 @@
   },
   "exports": {
     ".": "./dist/index.js",
+    "./settings": "./dist/settings.js",
     "./package.json": "./package.json"
   },
   "main": "./dist/index.js",

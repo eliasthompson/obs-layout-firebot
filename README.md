@@ -222,6 +222,20 @@ that finds no `Move: Color` filter can write the color filter's setting directly
 integers in alpha, blue, green, red byte order, so `#rrggbb` becomes `0xffbbggrr`. The stroke has to be in color fill
 mode for its color to show. The transitions never touch this filter, so a recolor and a layout change can overlap.
 
+The filter names, the Move Transition values, and the settings builders are published for such a program on the
+`settings` subpath, which has no Node dependencies and runs in a browser:
+
+```ts
+import {
+  COLOR_MOVE_FILTER_NAME,
+  colorMoveFilterSettings,
+  resolveBorderColor,
+} from '@eliasthompson/obs-layout-firebot/settings';
+```
+
+`colorMoveFilterSettings(resolveBorderColor(config), color)` is exactly what `obs:deploy` wrote into the filter, with
+the new target color, so a recolor written with it stays in step with this package.
+
 ### Standby screens
 
 A scene entry with `standby` does not lay its participants out. Instead, every region collapses into one vertical line

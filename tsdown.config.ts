@@ -20,6 +20,7 @@ export default defineConfig([
     dts: true,
     entry: {
       index: 'src/index.ts',
+      settings: 'src/settings.ts',
     },
     exports: {
       legacy: true,

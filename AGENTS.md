@@ -11,7 +11,8 @@ Firebot custom script, plus the `obs-layout-firebot` CLI to install and operate 
 - `npm run format` / `npm run format:check`: Prettier
 - `npm run test` / `npm run test:coverage` / `npm run test:watch`: Vitest
 - `npm run build`: tsdown, emits `dist/obs-layout.js` (the Firebot script, one CommonJS file with the library bundled
-  in), `dist/index.js` and `dist/index.d.ts` (the library and config types), and `dist/cli.js` (the CLI)
+  in), `dist/index.js` and `dist/index.d.ts` (the library and config types), `dist/settings.js` and its types (the
+  portable `settings` subpath), and `dist/cli.js` (the CLI). The `exports` field is generated from these entries.
 - `npm run dev`: tsdown in watch mode, so a project that links this checkout runs the current source. The CLI's
   commands (`obs:deploy`, `obs:restart`, `obs:verify`, `obs:capture`, `firebot:deploy`, `firebot:restart`) run there,
   against that project's config. Commands are grouped by the program they act on, and each deploy is the one command
@@ -24,6 +25,9 @@ Before finishing a change, run typecheck, lint, format check, test coverage, and
 - `src/constants/`, `src/lib/`, `src/types/`: source, one export group per file.
 - `src/index.ts`: the only index file and the library entry; `export *` for every file (`export type *` for type-only
   files). Do not add per-directory index files.
+- `src/settings.ts`: the entry behind `@eliasthompson/obs-layout-firebot/settings`: the constants, settings builders,
+  and config types a program driving the same installation from a browser needs. Nothing it reaches may import a Node
+  built-in; `src/settings.test.ts` walks its import graph to check. Add a module to it only if it stays portable.
 - `src/firebot.ts`: the bundle entry Firebot loads. It only wires `src/lib` to the real file system and OBS, so it
   carries no logic of its own and is outside the coverage set.
 - `src/lib/*.test.ts`: one test file beside each lib file. Coverage of `src/lib` is held at 100% for statements,
