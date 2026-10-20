@@ -73,10 +73,11 @@ config (see [Machine settings](#machine-settings)) if the repository is shared.
 - In each layout scene, one item per region: a group or nested scene for the content, one for the camera, and so on.
   Items that a rectangle sizes keep whatever bounds type they have; items with no bounds type get Stretch.
 - Optionally one color source per region as its **border**, with the stroke and shadow filters of your choice. The
-  color source is sized to the region's border box minus `borderPadding` pixels per side, where `borderPadding` is
-  how far those filters extend the source.
-- Scene items the script toggles should have **no** show/hide transition. `obs-layout-firebot fades` sets that, in the
-  scene collection file, while OBS is closed.
+  color source is sized to the region's border box, the region grown by `regionBorder`, so `regionBorder` is the
+  visible border. `borderPadding` is how far those filters extend the source past it, such as a shadow's size: the
+  item sits that much further out, and the padding never pushes regions apart.
+- Scene items the script toggles should have **no** show/hide transition. `obs:deploy` sets that in the scene
+  collection file, around a restart of OBS.
 - For standby screens, a **standby text** scene in the container, below the participant layouts, holding one text
   source per screen, and any standby widgets as items of the container. `obs:deploy` crops the text scene at the canvas
   center.
@@ -107,8 +108,8 @@ export default {
   // OBS scene that holds one nested layout scene per participant
   container: '[Scene] Content',
   // Canvas options of obs-layout-generator, for every scene
-  options: { canvasPadding: 15, canvasMarginTop: 105, canvasMarginBottom: 105, regionBorder: 15 },
-  // Pixels the border sources' stroke and shadow filters add on every side
+  options: { canvasPadding: 24, canvasMarginTop: 105, canvasMarginBottom: 105, layoutGap: 18, regionBorder: 6 },
+  // Pixels the border sources' shadow filters add outside the border on every side
   borderPadding: 9,
   // Optional: the filter on each border that carries its color, so another program can recolor the borders through
   // the "Move: Color" filter obs:deploy adds for it; see Border colors
@@ -166,7 +167,7 @@ export default {
 | --------------- | ------------------------------------------------------------------------------------------------------------- |
 | `container`     | OBS scene whose items are the participant layout scenes.                                                      |
 | `options`       | `LayoutOptions` for the canvas, as in obs-layout-generator.                                                   |
-| `borderPadding` | Pixels the border sources' filters add on every side. Default `0`.                                            |
+| `borderPadding` | Pixels the border sources' filters add outside the border on every side. Default `0`.                         |
 | `borderColor`   | The filter on each border that carries its color, for recoloring; see [Border colors](#border-colors).        |
 | `duration`      | Move duration in milliseconds. Default `300`.                                                                 |
 | `participants`  | Every layout scene the installation knows, keyed by scene name, with the source (and border) for each region. |
@@ -248,9 +249,9 @@ The transition runs in stages, each one `duration` long:
 | Standby → standby | The old text slides back behind the line | The new text slides out            |
 | Standby → layout  | Text slides back, widgets fade out       | Regions grow out to the new layout |
 
-- **The line.** Content collapses to no width at the canvas center, which leaves each border's color source two border
-  rings wide (`regionBorder` minus `borderPadding` per side), `lineHeight` tall. With an inner stroke at least a ring
-  wide, the line is solid stroke. All borders collapse onto it, but only the first participant's main border stays
+- **The line.** Content collapses to no width at the canvas center, which leaves each border's color source two
+  borders wide (`regionBorder` per side), `lineHeight` tall. With an inner stroke at least a border wide, the line is
+  solid stroke. All borders collapse onto it, but only the first participant's main border stays
   shown (the region obs-layout-generator puts in the main column: main content, else camera, else aux content, else
   info), so their shadows do not stack. Leaving standby for a layout whose main region is another one, that border
   takes over the line in a single frame before the regions grow out.

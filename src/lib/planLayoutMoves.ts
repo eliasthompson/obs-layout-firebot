@@ -188,8 +188,10 @@ export const planLayoutMoves = (
       if (inner && binding.fontScale) sourceStep.fontSize = fontSizeFor(binding, binding.fontScale, inner.height);
       const steps = [sourceStep];
       if (binding.border) {
-        // The name sits inside its host region and has no border, so its border binding is sized like the name itself
-        const border = region && regionName !== 'name' ? growRegion(region, regionBorder) : region;
+        // The color source fills the border box, and the item sits borderPadding further out, where the border's
+        // filters reach. The name sits inside its host region and has no border, so its border source frames the name
+        const box = region && regionName !== 'name' ? growRegion(region, regionBorder) : region;
+        const border = box && growRegion(box, borderPadding);
         const borderStep = step(
           { scene: layout, source: binding.border, kind: 'border' },
           layoutTarget('border', border),

@@ -8,7 +8,7 @@ export type LayoutRegionName = keyof LayoutMetric;
 export interface SourceBinding {
   /** OBS source name of the scene item that fills the region. */
   source: string;
-  /** OBS source name of a color source drawn as the region's border, sized by `regionBorder` and `borderPadding`. */
+  /** OBS source name of a color source drawn as the region's border: the region grown by `regionBorder`. */
   border?: string;
   /** Pixels the source sits inside its region on every side, as padding within the border. The border is unaffected. */
   inset?: number;
@@ -68,7 +68,7 @@ export interface SceneBinding {
 export interface StandbySettings {
   /** Scene in the container, below the participant layouts, that holds every standby text and hides what is left of the line. */
   textScene: string;
-  /** Height of the line in pixels. Its width is the border ring on both sides: 2 × (regionBorder − borderPadding). */
+  /** Height of the line in pixels. Its width is the border on both sides: 2 × regionBorder. */
   lineHeight: number;
 }
 
@@ -113,7 +113,10 @@ export interface ScenesConfig {
   /** OBS scene that contains every participant layout scene as an item. */
   container: string;
   options?: LayoutOptions;
-  /** Pixels the border sources' filters add on every side; the color source is shrunk by this much. */
+  /**
+   * Pixels the border sources' filters, such as a shadow, add outside the border on every side. The border item sits
+   * this much further out, so its color source still fills the border box. `regionBorder` is the visible border.
+   */
   borderPadding?: number;
   /** The filter that colors the borders, when something else drives their color. */
   borderColor?: BorderColorSettings;

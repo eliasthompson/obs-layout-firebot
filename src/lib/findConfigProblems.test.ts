@@ -112,7 +112,7 @@ describe('findConfigProblems', () => {
     const region = { x: 0, y: 0, width: 10, height: 10 };
     const standby: ScenesConfig = {
       ...config,
-      options: { regionBorder: 15 },
+      options: { regionBorder: 6 },
       borderPadding: 9,
       standby: { textScene: 'Text', lineHeight: 540 },
       scenes: {
@@ -141,14 +141,12 @@ describe('findConfigProblems', () => {
       expect(findConfigProblems(standby, standbyInventory)).toEqual([]);
     });
 
-    it('needs the standby settings and border rings for the line', () => {
+    it('needs the standby settings and a border for the line', () => {
       expect(messages(findConfigProblems({ ...standby, standby: undefined }, standbyInventory))).toEqual([
         'scenes use standby, but the config has no standby settings (textScene, lineHeight)',
       ]);
-      expect(
-        messages(findConfigProblems({ ...standby, options: {}, borderPadding: undefined }, standbyInventory)),
-      ).toEqual([
-        'the standby line is two border rings wide, so options.regionBorder (0) must be larger than borderPadding (0)',
+      expect(messages(findConfigProblems({ ...standby, options: {} }, standbyInventory))).toEqual([
+        'the standby line is two borders wide, so options.regionBorder (0) must be above 0',
       ]);
     });
 

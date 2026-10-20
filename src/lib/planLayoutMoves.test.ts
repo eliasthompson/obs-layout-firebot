@@ -10,7 +10,7 @@ const neverRegion = { x: -1, y: -1, width: -1, height: -1 };
 /** A canvas with no margins, padding, or borders, so a 16:9 main region fills it and leaves no side room */
 const bare = { canvasMarginTop: 0, canvasMarginBottom: 0, canvasPadding: 0, regionBorder: 0 };
 
-const options = { canvasPadding: 15, canvasMarginTop: 105, canvasMarginBottom: 105, regionBorder: 15 };
+const options = { canvasPadding: 24, canvasMarginTop: 105, canvasMarginBottom: 105, layoutGap: 18, regionBorder: 6 };
 
 const config: ScenesConfig = {
   container: '[Scene] Content',
@@ -179,11 +179,15 @@ describe('planLayoutMoves', () => {
     expect(name?.fontSize).toBeUndefined();
   });
 
-  it('sizes a name border like the name itself, without a border box', () => {
+  it('frames the name itself with a name border, without a border box', () => {
     const [metric] = generateLayout([{ hasName: true }], options);
     const steps = planLayoutMoves(config, '16:9 1P');
 
-    expect(steps[6]).toMatchObject({ source: '[Border] Name 1', region: metric.name });
+    expect(steps[6]).toMatchObject({
+      source: '[Border] Name 1',
+      region: growRegion(metric.name ?? neverRegion, 9),
+      size: { width: metric.name?.width, height: metric.name?.height },
+    });
   });
 
   it('moves a green screen camera border with the camera as if it framed it, but fades it out', () => {
@@ -195,12 +199,35 @@ describe('planLayoutMoves', () => {
     expect(metric.camera?.hasBorder).toBe(false);
     expect(camera).toMatchObject({ region: metric.camera, visible: true });
     expect(border).toMatchObject({
-      region: growRegion(metric.camera ?? neverRegion, 15),
+      region: growRegion(metric.camera ?? neverRegion, 6 + 9),
       size: { width: (metric.camera?.width ?? 0) + 12, height: (metric.camera?.height ?? 0) + 12 },
       visible: false,
     });
     // The content border still frames its region
     expect(steps.find((step) => step.source === '[Border] Content 1')).toMatchObject({ visible: true });
+  });
+
+  it("overlaps an attached region's color source with its neighbor's on exactly the shared border", () => {
+    const attached: ScenesConfig = {
+      ...config,
+      participants: {
+        L: {
+          sources: {
+            contentMain: { source: 'main', border: 'mainBorder' },
+            info: { source: 'info', border: 'infoBorder' },
+          },
+        },
+      },
+      scenes: { one: { participants: [{ layout: 'L', config: { info: { isMainAttached: true } } }] } },
+    };
+    const steps = planLayoutMoves(attached, 'one');
+    const main = steps.find((step) => step.source === 'mainBorder');
+    const info = steps.find((step) => step.source === 'infoBorder');
+    const mainRight = (main?.region?.x ?? 0) + 9 + (main?.size?.width ?? 0);
+    const infoLeft = (info?.region?.x ?? 0) + 9;
+
+    // The shadow padding sits outside both, so it never pushes the two borders apart
+    expect(mainRight - infoLeft).toBe(6);
   });
 
   it('sends unused regions to a 1x1 point at the canvas center, hidden, with the scene duration', () => {
@@ -244,15 +271,18 @@ describe('planLayoutMoves', () => {
     expect(steps.find((step) => step.source === 'edge')).toMatchObject({ size: { width: 1, height: 1 } });
   });
 
-  it('keeps the border size at least 1x1 when padding exceeds the region', () => {
-    const tiny: ScenesConfig = {
+  it('sets the border item out by the padding, whatever it is, with its color source filling the border box', () => {
+    const [metric] = generateLayout([{}], options);
+    const wide: ScenesConfig = {
       ...config,
       borderPadding: 5000,
       scenes: { one: { participants: [{ layout: '[Layout] Person 1' }] } },
     };
+    const box = growRegion(metric.camera ?? neverRegion, 6);
 
-    expect(planLayoutMoves(tiny, 'one').find((step) => step.source === '[Border] Camera 1')).toMatchObject({
-      size: { width: 1, height: 1 },
+    expect(planLayoutMoves(wide, 'one').find((step) => step.source === '[Border] Camera 1')).toMatchObject({
+      region: growRegion(box, 5000),
+      size: { width: box.width, height: box.height },
     });
   });
 
@@ -317,7 +347,7 @@ describe('planLayoutMoves standby', () => {
       },
     },
   };
-  // The line: no content width at the center, a 30x558 border box, and a 12x540 color source
+  // The line: no content width at the center, a 30x558 border item, and a 12x540 color source
   const content = { x: 960, y: 276, width: 0, height: 528 };
   const line = { x: 945, y: 261, width: 30, height: 558 };
   const lineSize = { width: 12, height: 540 };

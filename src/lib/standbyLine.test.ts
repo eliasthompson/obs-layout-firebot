@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { standbyLine } from '@/lib/standbyLine';
 
 describe('standbyLine', () => {
-  it('collapses content to no width at the canvas center, leaving a color source two rings wide', () => {
+  it('collapses content to no width at the canvas center, leaving a color source two borders wide', () => {
     const config = {
       container: 'C',
-      options: { regionBorder: 15 },
+      options: { regionBorder: 6 },
       borderPadding: 9,
       participants: {},
       scenes: {},

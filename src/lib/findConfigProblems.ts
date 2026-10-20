@@ -57,10 +57,9 @@ export const findConfigProblems = (config: ScenesConfig, inventory: ObsInventory
     if (config.standby) {
       const { textScene } = config.standby;
       const regionBorder = config.options?.regionBorder ?? LAYOUT_OPTIONS_DEFAULT.regionBorder;
-      const borderPadding = config.borderPadding ?? 0;
-      if (regionBorder <= borderPadding) {
+      if (regionBorder <= 0) {
         error(
-          `the standby line is two border rings wide, so options.regionBorder (${String(regionBorder)}) must be larger than borderPadding (${String(borderPadding)})`,
+          `the standby line is two borders wide, so options.regionBorder (${String(regionBorder)}) must be above 0`,
         );
       }
       if (!hasScene(textScene)) error(`standby text scene "${textScene}" does not exist in OBS`);
