@@ -306,8 +306,7 @@ the config takes `--config <path>` (default `config/scenes.ts`); every command t
 | `firebot:deploy`  | Checks, stores, installs the script, and asks to restart for new presets or a new script; see below. `--skip-obs`.          |
 | `firebot:restart` | Restarts Firebot, never forcibly, around installing the presets and turning on the two settings above.                      |
 
-Version 2 grouped and reduced the commands: `setup` and `fades` became steps of `obs:deploy`, `install-script` a step
-of `firebot:deploy`, `apply` is `obs:verify`, and `init` is gone in favor of the example above.
+Version 2 renamed and regrouped the commands; see [Upgrading from 1.x](#upgrading-from-1x).
 
 ### Restarts
 
@@ -364,6 +363,25 @@ change the config instead.
 - **Another participant**: build a second layout scene in OBS like the first, add it to `participants`, and list it
   in the scenes that show it. The library splits participants into balanced rows.
 - Then `firebot:deploy`, which adds the preset for the new key and offers the restart.
+
+## Upgrading from 1.x
+
+- **Layout configs** take obs-layout-generator 2's nested shape: `contentMainAspectRatio: '4:3'` becomes
+  `contentMain: { aspectRatio: '4:3' }`, `null` still turns a region off, and `hasCamera: false` becomes
+  `camera: null`. See that package's migration table.
+- **`borderPadding`** is drawn outside `regionBorder` now, instead of being taken out of it, so `regionBorder` is the
+  visible border. A 1.x config that widened the border to make room for its shadow, such as `regionBorder: 15` with
+  `borderPadding: 9`, becomes `regionBorder: 6` with the spacing it gave up added back: `canvasPadding` 9 larger, and
+  `canvasGap` and `layoutGap` 18 larger. Plain layouts land on the same pixels, and attached regions and green screen
+  cameras meet the visible border.
+- **Presets** derive from the config, ids included, so `config/preset-effect-lists.json` and `--presets` are gone;
+  delete the file. The first `firebot:deploy` replaces every layout preset with one under its new id, so anything in
+  Firebot that runs one needs pointing at it once.
+- **Presets no longer change the OBS scene** with an effect of their own: the script switches program to the
+  container only when program shows another scene.
+- **Commands** are grouped by program: `deploy` is `firebot:deploy`, `restart-firebot` is `firebot:restart`, `apply`
+  is `obs:verify`, and `capture` is `obs:capture`. `setup` and `fades` are steps of `obs:deploy`, `install-script` is
+  a step of `firebot:deploy`, and `init` is gone in favor of the example above.
 
 ## Development
 
