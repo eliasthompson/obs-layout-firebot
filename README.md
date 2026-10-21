@@ -44,8 +44,9 @@ The filters do the animating:
   fades. OBS's own scene item show/hide Fade brightens toward white on anything with transparency, so it is not used.
 
 Regions a layout does not use fade out while shrinking to a point at the canvas center and are hidden; when a later
-layout needs them, they fade in while growing from that point. Participant layouts a scene does not use fade out and
-hide in the container scene.
+layout needs them, they fade in while growing from that point. The name is the exception: it has no border and always
+sits over another region, so without `hasName` it fades out where it would be, keeps moving with its host while hidden,
+and fades back in place. Participant layouts a scene does not use fade out and hide in the container scene.
 
 ## Getting started
 

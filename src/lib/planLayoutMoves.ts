@@ -110,7 +110,9 @@ const layoutMetrics = (
  * Plan the transition to a scene key: one move step per bound item of the participants it shows, one visibility step
  * per participant layout in the pool, and one step per standby text and widget. Each shown participant's config is
  * built up from the config's base, their pool entry, the scene, and the modifiers in effect. Regions a layout does
- * not use are sent to a 1x1 point at the canvas center and hidden, so a later layout grows them out of that point.
+ * not use are sent to a 1x1 point at the canvas center and hidden, so a later layout grows them out of that point. The
+ * name is the exception: it has no border and always sits over a host region, so without one it stays hidden where
+ * it would be, and only fades.
  *
  * A standby scene collapses every participant's regions into the standby line instead: content to no width at the
  * canvas center, every border onto the line, and only the line participant's main border left showing as the line
@@ -167,13 +169,18 @@ export const planLayoutMoves = (
   const duration = scene.duration ?? config.duration ?? DEFAULT_DURATION;
   const shownIndex = new Map(shown.map((participant, index) => [participant.layout, index]));
   const inEffect = resolveModifiers(config, scene, modifiers);
-  const metrics = scene.standby
+  const configs = scene.standby
     ? []
+    : shown.map((participant) => resolveParticipantConfig(config, participant, inEffect));
+  const metrics = scene.standby ? [] : layoutMetrics(config, scene, shown, configs);
+  // The layout as if every participant had a name, which moves nothing else, for where a name left out would be
+  const namedMetrics = configs.every((layoutConfig) => layoutConfig.hasName)
+    ? metrics
     : layoutMetrics(
         config,
         scene,
         shown,
-        shown.map((participant) => resolveParticipantConfig(config, participant, inEffect)),
+        configs.map((layoutConfig) => ({ ...layoutConfig, hasName: true })),
       );
 
   // Record lookups are typed as always present; a scene OBS could not report is missing
@@ -230,15 +237,18 @@ export const planLayoutMoves = (
     layout: string,
     entry: ParticipantPoolEntry,
     metric: LayoutMetric,
+    namedMetric: LayoutMetric,
     participant: SceneParticipant,
   ) =>
     Object.entries(entry.sources).flatMap(([regionName, binding]) => {
-      const region = metric[regionName as LayoutRegionName];
+      // A name the layout leaves out waits hidden where it would be, over its host, so switching names only fades it
+      const placed = metric[regionName as LayoutRegionName];
+      const region = regionName === 'name' ? (placed ?? namedMetric.name) : placed;
       const settings = settingsFor(config, participant, regionName as LayoutRegionName);
       // The source may sit inside its region as padding; the border still frames the whole region
       const inner = region && settings.inset ? shrinkRegion(region, settings.inset) : region;
       const sourceStep = step({ scene: layout, source: binding.source, kind: 'source' }, layoutTarget('source', inner));
-      // A text source is sized to fit its height, from how tall it renders now; hidden text keeps its last size
+      // A text source is sized to fit its height, from how tall it renders now; text sent away keeps its last size
       if (inner && sizesFont(settings)) {
         sourceStep.fontSize = fontSizeFor(
           settings,
@@ -262,6 +272,7 @@ export const planLayoutMoves = (
         if (region && regionName !== 'name' && !region.hasBorder) borderStep.visible = false;
         steps.push(borderStep);
       }
+      if (!placed) for (const hidden of steps) hidden.visible = false;
       return steps;
     });
 
@@ -323,7 +334,7 @@ export const planLayoutMoves = (
 
     // generateLayout returns one metric per config, in order
     const metric = metrics[index];
-    const steps = layoutSteps(layout, entry, metric, shown[index]);
+    const steps = layoutSteps(layout, entry, metric, namedMetrics[index], shown[index]);
     if (index === 0) handOff(layout, entry, metric, steps);
     return [layoutStep, ...steps];
   });

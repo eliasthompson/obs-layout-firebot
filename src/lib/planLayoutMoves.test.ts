@@ -242,19 +242,24 @@ describe('planLayoutMoves', () => {
     expect(stepFor('tight', 'name')?.fontSize).toBe(30);
   });
 
-  it('leaves the font size alone for hidden text', () => {
+  it('sizes a hidden name for where it waits, and leaves the font size alone for a name sent away', () => {
     const hiddenName: ScenesConfig = {
       ...config,
       participants: {
         L: { sources: { name: { source: 'name' }, camera: { source: 'cam' } }, regions: { name: { fontSizeMax: 48 } } },
       },
-      scenes: { one: { participants: [{ layout: 'L', config: { hasName: false } }] } },
+      scenes: {
+        shown: { participants: [{ layout: 'L', config: { hasName: true } }] },
+        one: { participants: [{ layout: 'L', config: { hasName: false } }] },
+        away: { participants: [{ layout: 'L', config: { camera: null, contentMain: null } }] },
+      },
     };
+    const nameIn = (sceneKey: string) => planLayoutMoves(hiddenName, sceneKey).find((step) => step.source === 'name');
 
-    const name = planLayoutMoves(hiddenName, 'one').find((step) => step.source === 'name');
-
-    expect(name?.visible).toBe(false);
-    expect(name?.fontSize).toBeUndefined();
+    // It fades in at the size it shows at, since a font size cannot be animated
+    expect(nameIn('one')?.visible).toBe(false);
+    expect(nameIn('one')?.fontSize).toBe(nameIn('shown')?.fontSize);
+    expect(nameIn('away')?.fontSize).toBeUndefined();
   });
 
   it('frames the name itself with a name border, without a border box', () => {
@@ -315,6 +320,38 @@ describe('planLayoutMoves', () => {
 
     expect(content).toMatchObject({ region: { x: 960, y: 540, width: 1, height: 1 }, visible: false, duration: 500 });
     expect(border).toMatchObject({ region: { x: 960, y: 540, width: 1, height: 1 }, size: { width: 1, height: 1 } });
+  });
+
+  it('hides a name the layout leaves out where it would be, and moves nothing else for it', () => {
+    const [named] = generateLayout([{ contentMain: null, hasName: true }], options);
+    const steps = planLayoutMoves(config, 'Camera 1P');
+    const name = steps.find((step) => step.source === '[Widget] Name 1');
+    const border = steps.find((step) => step.source === '[Border] Name 1');
+
+    expect(named.name).toBeDefined();
+    expect(name).toMatchObject({ region: named.name, visible: false });
+    expect(border).toMatchObject({ region: growRegion(named.name ?? neverRegion, 9), visible: false });
+    expect(steps.find((step) => step.source === '[Group] Camera 1')).toMatchObject({
+      region: named.camera,
+      visible: true,
+    });
+  });
+
+  it('sends a name with no host left to the canvas center', () => {
+    const steps = planLayoutMoves(
+      {
+        ...config,
+        scenes: {
+          empty: { participants: [{ layout: '[Layout] Person 1', config: { camera: null, contentMain: null } }] },
+        },
+      },
+      'empty',
+    );
+
+    expect(steps.find((step) => step.source === '[Widget] Name 1')).toMatchObject({
+      region: { x: 960, y: 540, width: 1, height: 1 },
+      visible: false,
+    });
   });
 
   it('uses the scene options over the config options for the center and border', () => {
