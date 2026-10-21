@@ -2,7 +2,7 @@ import { createJiti } from 'jiti';
 // Where the tools find the config, Firebot, and OBS. Each setting comes from a command-line option, else an
 // environment variable (set in the shell or in a .env file in the working directory, see .env.example), else the
 // config's `firebot` and `obs` entries, else the default for the platform.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, extname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
@@ -82,19 +82,30 @@ export const configVariable = (config: ScenesConfig, flag?: string) =>
   flag ?? config.firebot?.variable ?? DEFAULT_CONFIG_VARIABLE;
 
 /**
- * OBS scene collection file: `--collection`, `OBS_SCENE_COLLECTION`, the collection OBS reported as active when it
- * was asked, or the config's collection (default "Untitled").
+ * The file OBS keeps a scene collection in. OBS names it after the collection made file-safe (spaces to underscores,
+ * other punctuation dropped, a number added when taken), so it is found by the name it holds, else by that rule.
+ */
+const sceneCollectionFile = (name: string) => {
+  const dir = join(appDataDir(), 'obs-studio', 'basic', 'scenes');
+  const files = existsSync(dir) ? readdirSync(dir).filter((file) => extname(file) === '.json') : [];
+  const named = files.find((file) => {
+    try {
+      return (JSON.parse(readFileSync(join(dir, file), 'utf8')) as { name?: unknown }).name === name;
+    } catch {
+      return false;
+    }
+  });
+  return join(dir, named ?? `${name.replace(/\s/gu, '_').replace(/[^\p{L}\p{N}_]/gu, '')}.json`);
+};
+
+/**
+ * OBS scene collection file: `--collection`, `OBS_SCENE_COLLECTION`, or the file of the collection OBS reported as
+ * active when it was asked, else of the config's collection (default "Untitled").
  */
 export const obsSceneCollectionPath = (config?: ScenesConfig, flag?: string, activeCollection?: string) =>
   flag ??
   process.env.OBS_SCENE_COLLECTION ??
-  join(
-    appDataDir(),
-    'obs-studio',
-    'basic',
-    'scenes',
-    `${activeCollection ?? config?.obs?.sceneCollection ?? DEFAULT_SCENE_COLLECTION}.json`,
-  );
+  sceneCollectionFile(activeCollection ?? config?.obs?.sceneCollection ?? DEFAULT_SCENE_COLLECTION);
 
 /** Ask a yes/no question on the terminal. `yes` answers it beforehand; without a terminal the answer is no. */
 export const confirm = async (question: string, yes = false) => {
