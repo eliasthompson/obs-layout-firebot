@@ -1,13 +1,29 @@
 // Installing the built script into the Firebot profile's scripts folder, a step of `firebot:deploy`. Firebot caches
 // a loaded script, so a new build is one of the reasons the deploy restarts Firebot.
+import { version as bundledGeneratorVersion } from '@eliasthompson/obs-layout-generator/package.json';
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
 import { SCRIPT_FILE_NAME } from '@/lib/createPresetEffectList';
 
-import { backupPath, packageRoot } from './environment';
+import { backupPath, packageRoot, readJson } from './environment';
 
 export type InstallScriptResult = 'installed' | 'unchanged';
+
+/**
+ * Warn when the obs-layout-generator bundled into the script is not the one installed here. The script carries the
+ * version this package was built with (the build inlines it here too), while the CLI and the project's own code use
+ * the project's copy, the peer dependency, so the two can lay out the same config differently.
+ */
+export const warnGeneratorMismatch = () => {
+  const manifest = createRequire(import.meta.url).resolve('@eliasthompson/obs-layout-generator/package.json');
+  const { version: installed } = readJson(manifest) as { version: string };
+  if (installed === bundledGeneratorVersion) return;
+  console.log(
+    `WARNING the script bundles obs-layout-generator ${bundledGeneratorVersion} but ${installed} is installed here, so its layouts can differ from this project's`,
+  );
+};
 
 /**
  * Install the built script into the profile when it differs from what is there. Returns whether anything changed, or

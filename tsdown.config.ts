@@ -32,6 +32,9 @@ export default defineConfig([
   },
   {
     clean: false,
+    deps: {
+      alwaysBundle: ['@eliasthompson/obs-layout-generator/package.json'],
+    },
     dts: false,
     entry: {
       cli: 'tools/cli.ts',

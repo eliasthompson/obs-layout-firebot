@@ -53,11 +53,15 @@ and fades back in place. Participant layouts a scene does not use fade out and h
 In a folder of your own (an existing project works too):
 
 ```sh
-npm install --save-dev @eliasthompson/obs-layout-firebot
+npm install --save-dev @eliasthompson/obs-layout-firebot @eliasthompson/obs-layout-generator
 # describe your OBS scenes and sources in config/scenes.ts (see Config below), then:
 npx obs-layout-firebot obs:deploy       # creates the filters in OBS, then restarts OBS if the item transitions need setting
 npx obs-layout-firebot firebot:deploy   # checks the config against OBS, stores it in Firebot, installs the script and presets
 ```
+
+obs-layout-generator is a peer dependency: the config's layout types come from it, and the CLI lays out with your
+project's copy, the same one your own code uses. The script Firebot runs is a single file with the generator bundled
+in, the version this package was built with; `firebot:deploy` warns when that is not the version you have installed.
 
 Both deploys ask before restarting their program, and each is the one command to rerun after a change on its side.
 After that, each scene key is a preset effect list in Firebot that you can run from a command, a Stream Deck button,
@@ -414,7 +418,8 @@ that is replaced is backed up next to it, with a timestamp.
    to be started when it is not running; pass `--skip-obs` to deploy without it.
 2. It stores the config in the `layoutScenes` variable (or `firebot.variable`). The next preset run uses it; nothing
    needs a restart.
-3. It installs the built script into the profile when it differs from the installed one.
+3. It installs the built script into the profile when it differs from the installed one, and warns when the
+   obs-layout-generator bundled into the script is not the version installed in your project.
 4. It derives the presets from the config, one per scene key plus the modifier and reset presets, and compares them
    with the profile's presets and the ones Firebot has loaded.
 5. When a preset is missing, out of date, or left over from a removed key, or the script changed, it asks whether to

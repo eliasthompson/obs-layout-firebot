@@ -10,8 +10,8 @@ Firebot custom script, plus the `obs-layout-firebot` CLI to install and operate 
 - `npm run lint` / `npm run lint:fix`: ESLint with type-aware rules
 - `npm run format` / `npm run format:check`: Prettier
 - `npm run test` / `npm run test:coverage` / `npm run test:watch`: Vitest
-- `npm run build`: tsdown, emits `dist/obs-layout.js` (the Firebot script, one CommonJS file with the library bundled
-  in), `dist/index.js` and `dist/index.d.ts` (the library and config types), `dist/settings.js` and its types (the
+- `npm run build`: tsdown, emits `dist/obs-layout.js` (the Firebot script, one CommonJS file with the library and
+  obs-layout-generator bundled in), `dist/index.js` and `dist/index.d.ts` (the library and config types), `dist/settings.js` and its types (the
   portable `settings` subpath), and `dist/cli.js` (the CLI). The `exports` field is generated from these entries.
 - `npm run dev`: tsdown in watch mode, so a project that links this checkout runs the current source. The CLI's
   commands (`obs:deploy`, `obs:restart`, `obs:verify`, `obs:capture`, `firebot:deploy`, `firebot:restart`) run there,
@@ -79,5 +79,10 @@ Before finishing a change, run typecheck, lint, format check, test coverage, and
 - Do not use `baseUrl` in tsconfig; `paths` resolves relative to the tsconfig file.
 - `src/` runs inside Firebot's Electron main process and uses Node built-ins and the global `WebSocket`; it is not
   platform-neutral and does not need to be. The CLI needs Node 22.4 or later for the global `WebSocket`.
+- `@eliasthompson/obs-layout-generator` is a peer dependency, and a dev dependency for the build and tests: the
+  config types are built on its types, and a project that writes a config uses it too, so there must be one copy.
+  The library and the CLI import the project's copy. Only `dist/obs-layout.js` bundles it, because Firebot loads that
+  file from the profile without a `node_modules`; the CLI build inlines the generator's `package.json` so
+  `firebot:deploy` can warn when the project's version differs from the bundled one.
 - To work against an unreleased `@eliasthompson/obs-layout-generator`, link the sibling repo with
   `npx link ../obs-layout-generator` instead of changing the dependency in package.json.

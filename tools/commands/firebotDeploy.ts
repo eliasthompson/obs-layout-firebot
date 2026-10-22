@@ -26,7 +26,7 @@ import {
   sleep,
   toolObsConnection,
 } from '../lib/environment';
-import { installScriptFile } from '../lib/installScript';
+import { installScriptFile, warnGeneratorMismatch } from '../lib/installScript';
 import { connectObsPatiently, ensureObsRunning } from '../lib/obs';
 import { readProfilePresets, restartFirebot } from './firebotRestart';
 
@@ -125,6 +125,7 @@ export const firebotDeploy = async (args: string[]) => {
   }
 
   // 3. The script: Firebot caches a loaded one, so a new build is a reason to restart
+  warnGeneratorMismatch();
   const profileDir = firebotProfileDir(config);
   const scriptChanged = installScriptFile(profileDir, dryRun) === 'installed';
 
