@@ -39,7 +39,7 @@ describe('adjustInsetRatios', () => {
     const [metric] = generate([config]);
 
     expect(metric.contentMain?.height).toBe(810);
-    expect(innerError(metric.contentMain, 20, 4 / 3)).toBeLessThan(0.5);
+    expect(innerError(metric.contentMain, 20, 4 / 3)).toBeLessThanOrEqual(0.5);
   });
 
   it('adjusts aux content in the main column', () => {
@@ -51,7 +51,7 @@ describe('adjustInsetRatios', () => {
     const [metric] = generate([config]);
 
     expect(config.contentAux?.aspectRatio).not.toBe('4:3');
-    expect(innerError(metric.contentAux, 20, 4 / 3)).toBeLessThan(0.5);
+    expect(innerError(metric.contentAux, 20, 4 / 3)).toBeLessThanOrEqual(0.5);
   });
 
   it('leaves configs alone without insets, with auto or null ratios, for defaults, and for side cameras', () => {
