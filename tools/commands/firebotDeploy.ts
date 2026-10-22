@@ -1,21 +1,24 @@
-// Deploys the config to Firebot in one go: checks it against OBS (scenes, items, filters), stores it in Firebot's
-// custom variable, installs the built script into the profile when it changed, and offers to restart Firebot when it
-// still has to load the config's presets (one per scene key, derived from the config) or a new script. Firebot must
-// be running; OBS is waited for unless --skip-obs is given. Firebot is never closed forcibly: one that cannot be
-// closed from here is left for you to close, and then to start again. --dry-run reports every change without writing.
+// Deploys the config to Firebot in one go: checks it against OBS (each canvas's scenes, items, filters), stores it in
+// Firebot's custom variable, installs the built script into the profile when it changed, and offers to restart Firebot
+// when it still has to load the config's presets (one per scene key, derived from the config) or a new script.
+// Firebot must be running; OBS is waited for unless --skip-obs is given. Firebot is never closed forcibly: one that
+// cannot be closed from here is left for you to close, and then to start again. --dry-run reports every change without
+// writing.
 //
 //   obs-layout-firebot firebot:deploy [--config config/scenes.ts] [--variable layoutScenes] [--skip-obs] [--yes]
 //     [--no-restart] [--dry-run]
 import { parseArgs } from 'node:util';
 
-import type { ObsInventory } from '@/types/ObsInventory';
-import type { ScenesConfig } from '@/types/ScenesConfig';
+import type { ObsClient } from '@/lib/connectObs';
+import type { ConfigProblem, ObsInventory } from '@/types/ObsInventory';
+import type { CanvasScenesConfig, ScenesConfig } from '@/types/ScenesConfig';
 
 import { createPresetEffectLists } from '@/lib/createPresetEffectList';
-import { findConfigProblems } from '@/lib/findConfigProblems';
-import { listBindings } from '@/lib/listBindings';
+import { findConfigProblems, findSceneProblems } from '@/lib/findConfigProblems';
+import { listBindings, listScenes } from '@/lib/listBindings';
 import { compareLayoutPresets } from '@/lib/mergeLayoutPresets';
 
+import { canvasLabel, openCanvases } from '../lib/canvases';
 import {
   configVariable,
   confirm,
@@ -34,38 +37,68 @@ import { readProfilePresets, restartFirebot } from './firebotRestart';
 const RESTART_WAIT_MS = 180_000;
 const MANUAL_RESTART_WAIT_MS = 600_000;
 
-/** Read back every scene, item, and filter the config binds, to check the config against. */
-const readObsInventory = async (config: ScenesConfig): Promise<ObsInventory> => {
-  const client = await connectObsPatiently(toolObsConnection(config));
+/** Read back every scene, item, and filter a canvas's config binds, to check it against. */
+const readObsInventory = async (client: ObsClient, config: CanvasScenesConfig): Promise<ObsInventory> => {
   const inventory: ObsInventory = { sceneItems: {}, filters: {}, inputKinds: {} };
-  try {
-    const { scenes } = (await client.call('GetSceneList')) as { scenes: { sceneName: string }[] };
-    const sceneNames = new Set(scenes.map((scene) => scene.sceneName));
-    const textScenes = config.standby ? [config.standby.textScene] : [];
-    for (const scene of new Set([config.container, ...textScenes, ...Object.keys(config.participants)])) {
-      if (!sceneNames.has(scene)) continue;
-      const { sceneItems } = (await client.call('GetSceneItemList', { sceneName: scene })) as {
-        sceneItems: { sourceName: string; inputKind?: string }[];
+  const { scenes } = (await client.call('GetSceneList')) as { scenes: { sceneName: string }[] };
+  const sceneNames = new Set(scenes.map((scene) => scene.sceneName));
+  for (const scene of listScenes(config)) {
+    if (!sceneNames.has(scene)) continue;
+    const { sceneItems } = (await client.call('GetSceneItemList', { sceneName: scene })) as {
+      sceneItems: { sourceName: string; inputKind?: string }[];
+    };
+    inventory.sceneItems[scene] = sceneItems.map((item) => item.sourceName);
+    for (const item of sceneItems) {
+      if (item.inputKind !== undefined) inventory.inputKinds[item.sourceName] = item.inputKind;
+    }
+  }
+  for (const source of new Set(listBindings(config).flatMap(({ scene, source }) => [scene, source]))) {
+    try {
+      const { filters } = (await client.call('GetSourceFilterList', { sourceName: source })) as {
+        filters: { filterName: string }[];
       };
-      inventory.sceneItems[scene] = sceneItems.map((item) => item.sourceName);
-      for (const item of sceneItems) {
-        if (item.inputKind !== undefined) inventory.inputKinds[item.sourceName] = item.inputKind;
-      }
+      inventory.filters[source] = filters.map((filter) => filter.filterName);
+    } catch {
+      // A source that does not exist is reported through the scene items check
     }
-    for (const source of new Set(listBindings(config).flatMap(({ scene, source }) => [scene, source]))) {
-      try {
-        const { filters } = (await client.call('GetSourceFilterList', { sourceName: source })) as {
-          filters: { filterName: string }[];
-        };
-        inventory.filters[source] = filters.map((filter) => filter.filterName);
-      } catch {
-        // A source that does not exist is reported through the scene items check
-      }
+  }
+  return inventory;
+};
+
+/** Print each problem, and say whether any is an error. */
+const reportProblems = (problems: ConfigProblem[]) => {
+  for (const problem of problems) {
+    console.log(`${problem.severity === 'error' ? 'ERROR  ' : 'WARNING'} ${problem.message}`);
+  }
+  return problems.some((problem) => problem.severity === 'error');
+};
+
+/**
+ * Check the config against every canvas OBS has, printing each problem. A canvas OBS does not have is reported and
+ * skipped, so the rest still deploys.
+ *
+ * @returns Whether any problem is an error, and how many items the canvases bind.
+ */
+const checkCanvases = async (config: ScenesConfig) => {
+  const client = await connectObsPatiently(toolObsConnection(config));
+  try {
+    const problems: ConfigProblem[] = [];
+    let bound = 0;
+    for (const canvas of await openCanvases(client, config)) {
+      const label = canvasLabel(config, canvas.key);
+      const inventory = await readObsInventory(canvas.client, canvas.config);
+      problems.push(
+        ...findConfigProblems(canvas.config, inventory).map((problem) => ({
+          ...problem,
+          message: `${label}${problem.message}`,
+        })),
+      );
+      bound += listBindings(canvas.config).length;
     }
+    return { failed: reportProblems(problems), bound };
   } finally {
     client.close();
   }
-  return inventory;
 };
 
 const loadedPresetIds = async (apiUrl: string) =>
@@ -90,20 +123,23 @@ export const firebotDeploy = async (args: string[]) => {
   const config: ScenesConfig = { ...loaded, firebot: { ...loaded.firebot, variable } };
   const apiUrl = firebotApiUrl(config);
 
-  // 1. Check the config against OBS
+  // 1. Check the scenes and modifiers, which needs no OBS, then each canvas against OBS
+  if (reportProblems(findSceneProblems(config))) {
+    console.log('not deployed: fix the errors above first');
+    process.exitCode = 1;
+    return;
+  }
   if (values['skip-obs']) {
     console.log('skipping the OBS check');
   } else {
     await ensureObsRunning();
-    const problems = findConfigProblems(config, await readObsInventory(config));
-    for (const problem of problems)
-      console.log(`${problem.severity === 'error' ? 'ERROR  ' : 'WARNING'} ${problem.message}`);
-    if (problems.some((problem) => problem.severity === 'error')) {
+    const { failed, bound } = await checkCanvases(config);
+    if (failed) {
       console.log('not deployed: fix the errors above first');
       process.exitCode = 1;
       return;
     }
-    console.log(`OBS check passed for ${String(listBindings(config).length)} bound items`);
+    console.log(`OBS check passed for ${String(bound)} bound items`);
   }
 
   // 2. Store the config in Firebot

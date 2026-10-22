@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ScenesConfig } from '@/types/ScenesConfig';
+import type { CanvasScenesConfig } from '@/types/ScenesConfig';
 
-import { listBindings } from '@/lib/listBindings';
+import { listBindings, listScenes } from '@/lib/listBindings';
 
-const config: ScenesConfig = {
+const config: CanvasScenesConfig = {
   container: '[Scene] Content',
   participants: {
     '[Layout] Person 1': {
@@ -34,7 +34,7 @@ describe('listBindings', () => {
 
   it('lists the standby texts and widgets after the participants', () => {
     const region = { x: 0, y: 0, width: 10, height: 10 };
-    const withStandby: ScenesConfig = {
+    const withStandby: CanvasScenesConfig = {
       ...config,
       participants: {},
       standby: { textScene: 'Standby Text', lineHeight: 540 },
@@ -53,7 +53,7 @@ describe('listBindings', () => {
   });
 
   it("takes the bounds alignment from the config's regions under the participant's own", () => {
-    const withRegions: ScenesConfig = {
+    const withRegions: CanvasScenesConfig = {
       ...config,
       regions: { camera: { boundsAlignment: 'bottom right' }, info: { boundsAlignment: 'center' } },
     };
@@ -70,5 +70,17 @@ describe('listBindings', () => {
 
   it('lists nothing for an empty pool', () => {
     expect(listBindings({ ...config, participants: {} })).toEqual([]);
+  });
+
+  it('lists the scenes a layout drives: the container, the standby text scene, and the layouts, once each', () => {
+    expect(
+      listScenes({
+        container: 'Program',
+        participants: { Program: { sources: {} }, P1: { sources: {} } },
+        standby: { textScene: 'Text', lineHeight: 540 },
+        scenes: {},
+      }),
+    ).toEqual(['Program', 'Text', 'P1']);
+    expect(listScenes({ container: 'Program', participants: {}, scenes: {} })).toEqual(['Program']);
   });
 });

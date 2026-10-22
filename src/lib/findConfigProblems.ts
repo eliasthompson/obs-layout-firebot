@@ -1,7 +1,7 @@
 import { LAYOUT_OPTIONS_DEFAULT } from '@eliasthompson/obs-layout-generator';
 
 import type { ConfigProblem, ObsInventory } from '@/types/ObsInventory';
-import type { LayoutRegionName, ScenesConfig } from '@/types/ScenesConfig';
+import type { CanvasScenesConfig, LayoutRegionName, ScenesConfig } from '@/types/ScenesConfig';
 
 import {
   COLOR_MOVE_FILTER_NAME,
@@ -14,16 +14,18 @@ import { listBindings } from '@/lib/listBindings';
 import { listOverlays } from '@/lib/listOverlays';
 import { moveFilterName } from '@/lib/moveFilterName';
 import { resolveBorderColor } from '@/lib/resolveBorderColor';
+import { resolveCanvas } from '@/lib/resolveCanvasConfig';
 import { resolveRegionSettings } from '@/lib/resolveRegionSettings';
 import { sizesFont } from '@/lib/sizesFont';
 
 const SETUP_HINT = 'run `obs-layout-firebot obs:deploy`';
 
 /**
- * Everything in a config that would make a preset fail or misbehave, checked against what OBS has: missing scenes,
- * items, and filters are errors; a text option on a source that is not text is a warning.
+ * Everything in a canvas's config that would make a preset fail or misbehave, checked against what OBS has on that
+ * canvas: missing scenes, items, and filters are errors; a text option on a source that is not text is a warning.
+ * `findSceneProblems` checks the scenes and modifiers, which every canvas shares.
  */
-export const findConfigProblems = (config: ScenesConfig, inventory: ObsInventory): ConfigProblem[] => {
+export const findConfigProblems = (config: CanvasScenesConfig, inventory: ObsInventory): ConfigProblem[] => {
   const problems: ConfigProblem[] = [];
   const error = (message: string) => problems.push({ severity: 'error', message });
   const warning = (message: string) => problems.push({ severity: 'warning', message });
@@ -128,24 +130,50 @@ export const findConfigProblems = (config: ScenesConfig, inventory: ObsInventory
   });
   if (missingFilters.length) error(`missing filters, ${SETUP_HINT}: ${missingFilters.join(', ')}`);
 
+  return problems;
+};
+
+/**
+ * Everything in the scenes and modifiers every canvas shares that would make a preset fail: a scene that shows no
+ * participants or no canvas, a forced modifier or a modifier participant that does not exist. A scene a canvas leaves
+ * out because the canvas lacks what it shows is a warning, since it may be on purpose; the scene's
+ * `canvases: { <canvas>: false }` says so.
+ */
+export const findSceneProblems = (config: ScenesConfig): ConfigProblem[] => {
+  const problems: ConfigProblem[] = [];
+  const error = (message: string) => problems.push({ severity: 'error', message });
+  const warning = (message: string) => problems.push({ severity: 'warning', message });
+  const canvases = Object.keys(config.canvases).map((canvas) => ({ canvas, ...resolveCanvas(config, canvas) }));
+  const layouts = new Set(canvases.flatMap(({ config: view }) => Object.keys(view.participants)));
   const modifierNames = Object.keys(config.modifiers ?? {});
+
   for (const [name, modifier] of Object.entries(config.modifiers ?? {})) {
     for (const layout of modifier.participants ?? []) {
-      if (!(layout in config.participants)) error(`modifier "${name}" names unknown participant "${layout}"`);
+      if (!layouts.has(layout)) error(`modifier "${name}" names participant "${layout}", which no canvas has`);
     }
   }
 
   for (const [sceneKey, scene] of Object.entries(config.scenes)) {
     // A standby scene without participants collapses everyone; a layout scene has to show someone
     if (!scene.standby && !scene.participants?.length) error(`scene "${sceneKey}" shows no participants`);
-    for (const { layout } of scene.participants ?? []) {
-      if (!(layout in config.participants)) error(`scene "${sceneKey}" uses unknown participant "${layout}"`);
-    }
-    if (scene.standby?.line !== undefined && !(scene.standby.line in config.participants)) {
-      error(`scene "${sceneKey}" puts unknown participant "${scene.standby.line}" on the standby line`);
-    }
     for (const name of Object.keys(scene.modifiers ?? {})) {
       if (!modifierNames.includes(name)) error(`scene "${sceneKey}" forces unknown modifier "${name}"`);
+    }
+    const leftOut = canvases.filter(({ leftOut: left }) => Object.hasOwn(left, sceneKey));
+    if (leftOut.length === canvases.length) {
+      const reasons = leftOut.map(
+        ({ canvas, leftOut: left }) => `${canvas}: ${left[sceneKey] ?? 'the scene leaves it out'}`,
+      );
+      error(`scene "${sceneKey}" shows on no canvas (${reasons.join('; ')})`);
+      continue;
+    }
+    for (const { canvas, leftOut: left } of leftOut) {
+      const reason = left[sceneKey];
+      if (reason !== null) {
+        warning(
+          `scene "${sceneKey}" is left out of the "${canvas}" canvas, because ${reason}; set its canvases: { ${canvas}: false } if that is on purpose`,
+        );
+      }
     }
   }
 

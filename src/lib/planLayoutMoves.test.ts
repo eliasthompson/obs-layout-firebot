@@ -2,7 +2,7 @@ import { generateLayout } from '@eliasthompson/obs-layout-generator';
 import { describe, expect, it } from 'vitest';
 
 import type { ObsState } from '@/types/ObsState';
-import type { ScenesConfig } from '@/types/ScenesConfig';
+import type { CanvasScenesConfig } from '@/types/ScenesConfig';
 
 import { growRegion, shrinkRegion } from '@/lib/growRegion';
 import { planLayoutMoves } from '@/lib/planLayoutMoves';
@@ -13,7 +13,7 @@ const bare = { canvasMarginTop: 0, canvasMarginBottom: 0, canvasPadding: 0, regi
 
 const options = { canvasPadding: 24, canvasMarginTop: 105, canvasMarginBottom: 105, layoutGap: 18, regionBorder: 6 };
 
-const config: ScenesConfig = {
+const config: CanvasScenesConfig = {
   container: '[Scene] Content',
   options,
   borderPadding: 9,
@@ -78,7 +78,7 @@ describe('planLayoutMoves', () => {
 
   it('insets a source inside its region while the border frames the whole region', () => {
     const [metric] = generateLayout([{ hasName: true, info: { aspectRatio: '65:16' } }], options);
-    const inset: ScenesConfig = {
+    const inset: CanvasScenesConfig = {
       ...config,
       participants: {
         L: {
@@ -112,7 +112,7 @@ describe('planLayoutMoves', () => {
   });
 
   it('keeps the font size within its bounds and asks the layout for the matching smallest name height', () => {
-    const bounded: ScenesConfig = {
+    const bounded: CanvasScenesConfig = {
       ...config,
       participants: {
         L: {
@@ -157,7 +157,7 @@ describe('planLayoutMoves', () => {
   });
 
   it('asks for the smallest font height alone as the smallest name height when the text has no inset', () => {
-    const plain: ScenesConfig = {
+    const plain: CanvasScenesConfig = {
       ...config,
       participants: { L: { sources: { name: { source: 'name' } }, regions: { name: { fontSizeMin: 60 } } } },
       scenes: {
@@ -173,7 +173,7 @@ describe('planLayoutMoves', () => {
   });
 
   it('sizes the font from how tall the source renders at its current size, and assumes a line height otherwise', () => {
-    const measured: ScenesConfig = {
+    const measured: CanvasScenesConfig = {
       ...config,
       participants: {
         L: {
@@ -211,7 +211,7 @@ describe('planLayoutMoves', () => {
 
   it("layers region settings from the config's regions, the participant's, and the scene's", () => {
     const [metric] = generateLayout([{ hasName: true, info: { aspectRatio: '250:49' } }], options);
-    const layered: ScenesConfig = {
+    const layered: CanvasScenesConfig = {
       ...config,
       regions: { info: { inset: 12 }, name: { inset: 12, fontSizeMin: 24, fontSizeMax: 48 } },
       participants: {
@@ -243,7 +243,7 @@ describe('planLayoutMoves', () => {
   });
 
   it('sizes a hidden name for where it waits, and leaves the font size alone for a name sent away', () => {
-    const hiddenName: ScenesConfig = {
+    const hiddenName: CanvasScenesConfig = {
       ...config,
       participants: {
         L: { sources: { name: { source: 'name' }, camera: { source: 'cam' } }, regions: { name: { fontSizeMax: 48 } } },
@@ -291,7 +291,7 @@ describe('planLayoutMoves', () => {
   });
 
   it("overlaps an attached region's color source with its neighbor's on exactly the shared border", () => {
-    const attached: ScenesConfig = {
+    const attached: CanvasScenesConfig = {
       ...config,
       participants: {
         L: {
@@ -371,7 +371,7 @@ describe('planLayoutMoves', () => {
   });
 
   it('falls back to the library defaults and no border padding', () => {
-    const bare: ScenesConfig = {
+    const bare: CanvasScenesConfig = {
       container: 'C',
       participants: { L: { sources: { camera: { source: 'cam', border: 'edge' } } } },
       scenes: { only: { participants: [{ layout: 'L', config: { camera: null, contentMain: null } }] } },
@@ -388,7 +388,7 @@ describe('planLayoutMoves', () => {
 
   it('sets the border item out by the padding, whatever it is, with its color source filling the border box', () => {
     const [metric] = generateLayout([{}], options);
-    const wide: ScenesConfig = {
+    const wide: CanvasScenesConfig = {
       ...config,
       borderPadding: 5000,
       scenes: { one: { participants: [{ layout: '[Layout] Person 1' }] } },
@@ -419,7 +419,7 @@ describe('planLayoutMoves', () => {
   });
 
   it('layers the config, the pool, the scene, and the modifiers switched on, as the scene allows', () => {
-    const layered: ScenesConfig = {
+    const layered: CanvasScenesConfig = {
       ...config,
       config: { hasName: true },
       participants: {
@@ -452,7 +452,7 @@ describe('planLayoutMoves standby', () => {
   // Text OBS has not sized yet stands in a box the line suggests: 540 wide, 270 tall, centered on the line, 30 past it
   const unsizedText = { x: 990, y: 405, width: 540, height: 270 };
   const clipsRegion = { x: 100, y: 300, width: 600, height: 480 };
-  const standby: ScenesConfig = {
+  const standby: CanvasScenesConfig = {
     container: '[Scene] Canvas',
     options,
     borderPadding: 9,
@@ -666,7 +666,7 @@ describe('planLayoutMoves standby', () => {
       { '[Layout] Person 1': { mainBorder: false, camBorder: true } },
       { mainBorder: 1, camBorder: 402 },
     );
-    const noCameraBorder: ScenesConfig = {
+    const noCameraBorder: CanvasScenesConfig = {
       ...standby,
       participants: {
         '[Layout] Person 1': {

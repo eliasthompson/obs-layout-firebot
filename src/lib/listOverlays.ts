@@ -1,6 +1,6 @@
 import type { Binding } from '@/types/MoveStep';
 import type { Rect } from '@/types/Rect';
-import type { OverlayBinding, ScenesConfig } from '@/types/ScenesConfig';
+import type { CanvasScenesConfig, OverlayBinding } from '@/types/ScenesConfig';
 
 import { OBS_ALIGNMENT_FLAGS, STANDBY_TEXT_ALIGNMENT } from '@/constants/obsAlignment';
 
@@ -14,7 +14,7 @@ export interface Overlay {
  * Every standby text and widget any scene uses, once each, in the order scenes first use them. Texts are items of the
  * standby text scene and are left out while `standby` is not set; widgets are items of the container.
  */
-export const listOverlays = (config: ScenesConfig): Overlay[] => {
+export const listOverlays = (config: CanvasScenesConfig): Overlay[] => {
   const overlays = new Map<string, Overlay>();
   const add = (
     scene: string,

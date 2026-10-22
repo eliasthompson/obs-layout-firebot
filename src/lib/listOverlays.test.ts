@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ScenesConfig } from '@/types/ScenesConfig';
+import type { CanvasScenesConfig } from '@/types/ScenesConfig';
 
 import { listOverlays } from '@/lib/listOverlays';
 
 const soon = { x: 1000, y: 480, width: 700, height: 120 };
 const clips = { x: 100, y: 300, width: 600, height: 480 };
 
-const config: ScenesConfig = {
+const config: CanvasScenesConfig = {
   container: '[Scene] Canvas',
   standby: { textScene: '[Widget] Standby Text', lineHeight: 540 },
   participants: {},

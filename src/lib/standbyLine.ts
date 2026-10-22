@@ -2,7 +2,7 @@ import { LAYOUT_OPTIONS_DEFAULT } from '@eliasthompson/obs-layout-generator';
 
 import type { SourceSize } from '@/types/MoveStep';
 import type { Rect } from '@/types/Rect';
-import type { ScenesConfig } from '@/types/ScenesConfig';
+import type { CanvasScenesConfig } from '@/types/ScenesConfig';
 
 import { growRegion } from '@/lib/growRegion';
 
@@ -23,7 +23,7 @@ export interface StandbyLine {
  * border wide fills it from both sides. Uses the config's options, not a scene's, because the text scene's crop is set
  * up once for the whole canvas.
  */
-export const standbyLine = (config: ScenesConfig, lineHeight: number): StandbyLine => {
+export const standbyLine = (config: CanvasScenesConfig, lineHeight: number): StandbyLine => {
   const canvasWidth = config.options?.canvasWidth ?? LAYOUT_OPTIONS_DEFAULT.canvasWidth;
   const canvasHeight = config.options?.canvasHeight ?? LAYOUT_OPTIONS_DEFAULT.canvasHeight;
   const regionBorder = config.options?.regionBorder ?? LAYOUT_OPTIONS_DEFAULT.regionBorder;

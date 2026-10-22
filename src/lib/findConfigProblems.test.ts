@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ObsInventory } from '@/types/ObsInventory';
-import type { ScenesConfig } from '@/types/ScenesConfig';
+import type { CanvasScenesConfig, ScenesConfig } from '@/types/ScenesConfig';
 
-import { findConfigProblems } from '@/lib/findConfigProblems';
+import { findConfigProblems, findSceneProblems } from '@/lib/findConfigProblems';
 
-const config: ScenesConfig = {
+const config: CanvasScenesConfig = {
   container: 'Program',
   participants: {
     P1: {
@@ -76,7 +76,7 @@ describe('findConfigProblems', () => {
   });
 
   describe('border color', () => {
-    const colored: ScenesConfig = { ...config, borderColor: { filter: 'Stroke' } };
+    const colored: CanvasScenesConfig = { ...config, borderColor: { filter: 'Stroke' } };
 
     it('requires the color move filter on every border that has the color filter', () => {
       expect(messages(findConfigProblems(colored, inventory))).toEqual([
@@ -120,7 +120,7 @@ describe('findConfigProblems', () => {
 
   describe('standby', () => {
     const region = { x: 0, y: 0, width: 10, height: 10 };
-    const standby: ScenesConfig = {
+    const standby: CanvasScenesConfig = {
       ...config,
       options: { regionBorder: 6 },
       borderPadding: 9,
@@ -200,33 +200,75 @@ describe('findConfigProblems', () => {
       ).toEqual(['container scene "Program" does not exist in OBS']);
     });
   });
+});
 
-  it('checks scene entries for empty participant lists and unknown layouts', () => {
-    const scenes = { empty: { participants: [] }, ghost: { participants: [{ layout: 'P2' }] } };
+describe('findSceneProblems', () => {
+  const canvases: ScenesConfig['canvases'] = {
+    landscape: {
+      container: 'Program',
+      participants: { P1: { sources: {} }, P2: { sources: {} } },
+      standby: { textScene: 'Text', lineHeight: 540 },
+    },
+    portrait: { canvas: 'Aitum Vertical', container: 'Program', participants: { P1: { sources: {} } } },
+  };
 
-    expect(findConfigProblems({ ...config, scenes }, inventory)).toEqual([
+  it('finds nothing wrong with scenes every canvas shows', () => {
+    expect(findSceneProblems({ canvases, scenes: { solo: { participants: [{ layout: 'P1' }] } } })).toEqual([]);
+  });
+
+  it('reports empty participant lists, and scenes no canvas shows with why', () => {
+    const scenes: ScenesConfig['scenes'] = {
+      empty: { participants: [] },
+      ghost: { participants: [{ layout: 'P9' }] },
+      nowhere: { participants: [{ layout: 'P1' }], canvases: { landscape: false, portrait: false } },
+    };
+
+    expect(findSceneProblems({ canvases, scenes })).toEqual([
       { severity: 'error', message: 'scene "empty" shows no participants' },
-      { severity: 'error', message: 'scene "ghost" uses unknown participant "P2"' },
+      {
+        severity: 'error',
+        message:
+          'scene "ghost" shows on no canvas (landscape: it shows "P9", which the canvas does not have; portrait: it shows "P9", which the canvas does not have)',
+      },
+      {
+        severity: 'error',
+        message:
+          'scene "nowhere" shows on no canvas (landscape: the scene leaves it out; portrait: the scene leaves it out)',
+      },
     ]);
   });
 
-  it('checks modifiers, the modifiers scenes force, and the participant on the standby line', () => {
-    const withModifiers: ScenesConfig = {
-      ...config,
-      options: { regionBorder: 6 },
-      standby: { textScene: 'Text', lineHeight: 540 },
-      modifiers: { Keyed: { config: {}, participants: ['P1', 'P9'] }, Names: { config: {} } },
-      scenes: {
-        solo: { participants: [{ layout: 'P1' }], modifiers: { Keyed: true, Ghost: false } },
-        soon: { standby: { line: 'P8' } },
-      },
+  it('warns about a scene a canvas leaves out, unless the scene leaves the canvas out itself', () => {
+    const scenes: ScenesConfig['scenes'] = {
+      duo: { participants: [{ layout: 'P1' }, { layout: 'P2' }] },
+      landscapeDuo: { participants: [{ layout: 'P1' }, { layout: 'P2' }], canvases: { portrait: false } },
+      soon: { standby: {} },
     };
-    const withText = { ...inventory, sceneItems: { ...inventory.sceneItems, Program: ['Text', 'P1'], Text: [] } };
 
-    expect(messages(findConfigProblems(withModifiers, withText))).toEqual([
-      'modifier "Keyed" names unknown participant "P9"',
+    expect(findSceneProblems({ canvases, scenes })).toEqual([
+      {
+        severity: 'warning',
+        message:
+          'scene "duo" is left out of the "portrait" canvas, because it shows "P2", which the canvas does not have; set its canvases: { portrait: false } if that is on purpose',
+      },
+      {
+        severity: 'warning',
+        message:
+          'scene "soon" is left out of the "portrait" canvas, because it is a standby scene, and the canvas has no standby settings; set its canvases: { portrait: false } if that is on purpose',
+      },
+    ]);
+  });
+
+  it('checks the participants of modifiers on every canvas, and the modifiers scenes force', () => {
+    const config: ScenesConfig = {
+      canvases,
+      modifiers: { Keyed: { config: {}, participants: ['P1', 'P2', 'P9'] }, Names: { config: {} } },
+      scenes: { solo: { participants: [{ layout: 'P1' }], modifiers: { Keyed: true, Ghost: false } } },
+    };
+
+    expect(findSceneProblems(config).map((problem) => problem.message)).toEqual([
+      'modifier "Keyed" names participant "P9", which no canvas has',
       'scene "solo" forces unknown modifier "Ghost"',
-      'scene "soon" puts unknown participant "P8" on the standby line',
     ]);
   });
 });

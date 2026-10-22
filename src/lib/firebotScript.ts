@@ -127,6 +127,9 @@ export const createRun =
       logger.info(
         `OBS Layout: scene "${sceneKey}"${modifiers.length ? ` with ${modifiers.join(', ')}` : ''}, ${String(shown)} items shown, ${String(summary.steps.length - shown)} hidden, ${String(summary.requests.length)} requests in ${String(summary.durationMs)} ms.`,
       );
+      for (const { canvas, skipped } of summary.canvases) {
+        if (skipped) logger.warn(`OBS Layout: left the "${canvas}" canvas as it is: ${skipped}.`);
+      }
       for (const result of summary.failed) {
         logger.warn(
           `OBS Layout: ${result.requestType} failed: ${String(result.requestStatus.code)} ${result.requestStatus.comment ?? ''}`.trimEnd(),

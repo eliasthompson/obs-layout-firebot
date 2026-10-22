@@ -5,7 +5,7 @@
 // brightens toward white on anything with transparency.
 import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
 
-import type { ScenesConfig } from '@/types/ScenesConfig';
+import type { CanvasScenesConfig } from '@/types/ScenesConfig';
 
 import { listBindings } from '@/lib/listBindings';
 
@@ -18,7 +18,18 @@ interface SceneItem {
 }
 
 interface SceneCollection {
-  sources: { name: string; settings?: { items?: SceneItem[] } }[];
+  /** Every scene and input; a scene records the canvas it belongs to, as OBS 32 and later save it. */
+  sources: { name: string; canvas_uuid?: string; settings?: { items?: SceneItem[] } }[];
+}
+
+/** A canvas whose items get transitions, and how the collection file tells its scenes apart. */
+export interface FadesCanvas {
+  config: CanvasScenesConfig;
+  /** The canvas's UUID, when OBS lists its canvases; without it, scenes are found by name alone. */
+  uuid?: string;
+  isMain: boolean;
+  /** A prefix naming the canvas in the output. */
+  label: string;
 }
 
 export type FadeTransition = 'fade' | 'none';
@@ -43,9 +54,13 @@ export interface FadesResult {
   missing: number;
 }
 
-/** Set the transitions in the collection file, backing it up first. */
+/**
+ * Set the transitions of every canvas's items in the collection file, backing it up first. Scene names can repeat
+ * across canvases, so a scene is found by name on its own canvas; a main canvas scene saved before OBS had canvases
+ * records none.
+ */
 export const writeFades = (
-  config: ScenesConfig,
+  canvases: FadesCanvas[],
   collectionPath: string,
   { transition, duration, dryRun }: FadesOptions,
 ): FadesResult => {
@@ -65,21 +80,25 @@ export const writeFades = (
 
   let changed = 0;
   let missing = 0;
-  for (const { scene, source } of listBindings(config)) {
-    const item = collection.sources
-      .find((candidate) => candidate.name === scene)
-      ?.settings?.items?.find((candidate) => candidate.name === source);
-    if (!item) {
-      console.log(`SKIP  ${scene} / ${source}: not found in the scene collection`);
-      missing += 1;
-      continue;
+  for (const { config, uuid, isMain, label } of canvases) {
+    const onCanvas = ({ canvas_uuid }: SceneCollection['sources'][number]) =>
+      uuid === undefined || canvas_uuid === uuid || (isMain && canvas_uuid === undefined);
+    for (const { scene, source } of listBindings(config)) {
+      const item = collection.sources
+        .find((candidate) => candidate.name === scene && onCanvas(candidate))
+        ?.settings?.items?.find((candidate) => candidate.name === source);
+      if (!item) {
+        console.log(`SKIP  ${label}${scene} / ${source}: not found in the scene collection`);
+        missing += 1;
+        continue;
+      }
+      const before = JSON.stringify([item.show_transition, item.hide_transition]);
+      item.show_transition = transitionOf(source, 'Show');
+      item.hide_transition = transitionOf(source, 'Hide');
+      const after = JSON.stringify([item.show_transition, item.hide_transition]);
+      console.log(`${before === after ? 'KEEP ' : dryRun ? 'WOULD' : 'SET  '} ${label}${scene} / ${source}`);
+      if (before !== after) changed += 1;
     }
-    const before = JSON.stringify([item.show_transition, item.hide_transition]);
-    item.show_transition = transitionOf(source, 'Show');
-    item.hide_transition = transitionOf(source, 'Hide');
-    const after = JSON.stringify([item.show_transition, item.hide_transition]);
-    console.log(`${before === after ? 'KEEP ' : dryRun ? 'WOULD' : 'SET  '} ${scene} / ${source}`);
-    if (before !== after) changed += 1;
   }
 
   if (!changed) {

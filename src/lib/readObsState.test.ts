@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ObsClient } from '@/lib/connectObs';
 import type { ObsBatchResult } from '@/types/ObsRequest';
-import type { ScenesConfig } from '@/types/ScenesConfig';
+import type { CanvasScenesConfig } from '@/types/ScenesConfig';
 
 import { readObsState } from '@/lib/readObsState';
 
-const config: ScenesConfig = {
+const config: CanvasScenesConfig = {
   container: 'C',
   standby: { textScene: 'T', lineHeight: 540 },
   participants: {
@@ -77,7 +77,11 @@ describe('readObsState', () => {
 
   it('leaves out border widths OBS could not report', async () => {
     const client = fakeClient([failed('GetSceneItemList'), failed('GetSourceFilter'), ok('GetSourceFilter')]);
-    const borderOnly: ScenesConfig = { ...config, container: 'L1', standby: { textScene: 'L1', lineHeight: 540 } };
+    const borderOnly: CanvasScenesConfig = {
+      ...config,
+      container: 'L1',
+      standby: { textScene: 'L1', lineHeight: 540 },
+    };
 
     expect(await readObsState(client, { ...borderOnly, participants: { L1: config.participants.L2 } })).toEqual({
       sceneItems: {},
@@ -87,7 +91,7 @@ describe('readObsState', () => {
   });
 
   it("reads the font size of a text sized by the config's regions or by a scene alone", async () => {
-    const layered: ScenesConfig = {
+    const layered: CanvasScenesConfig = {
       ...config,
       standby: undefined,
       regions: { name: { fontSizeMax: 48 } },
@@ -118,7 +122,7 @@ describe('readObsState', () => {
   });
 
   it('reads the layout scenes and the font size of every text sized to its region, without standby', async () => {
-    const sized: ScenesConfig = {
+    const sized: CanvasScenesConfig = {
       ...config,
       standby: undefined,
       participants: {

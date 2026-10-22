@@ -6,7 +6,7 @@
 // Source filters on the managed scenes that no longer match a bound item (renamed or removed sources) are deleted.
 // Idempotent: existing filters are updated only where they differ, never duplicated.
 import type { ObsClient } from '@/lib/connectObs';
-import type { ScenesConfig } from '@/types/ScenesConfig';
+import type { CanvasScenesConfig } from '@/types/ScenesConfig';
 
 import {
   COLOR_MOVE_FILTER_NAME,
@@ -60,10 +60,12 @@ const moveTiming = { custom_duration: true, enabled_match_moving: true };
 export interface SetupOptions {
   /** Report every change without making it. */
   dryRun: boolean;
+  /** A prefix naming the canvas in the output. */
+  label?: string;
 }
 
 /** Set OBS up for the config over an open connection. Returns how many changes were made, or would be made. */
-export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun }: SetupOptions) => {
+export const runSetup = async (client: ObsClient, config: CanvasScenesConfig, { dryRun, label = '' }: SetupOptions) => {
   const bindings = listBindings(config);
   const borderColor = resolveBorderColor(config);
   const would = dryRun ? 'WOULD ' : '';
@@ -87,12 +89,12 @@ export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun
   ) => {
     const existing = (await filtersOf(sourceName)).find((filter) => filter.filterName === filterName);
     if (existing && existing.filterKind !== filterKind) {
-      console.log(`SKIP    ${sourceName} / ${filterName} exists but is a ${existing.filterKind}`);
+      console.log(`SKIP    ${label}${sourceName} / ${filterName} exists but is a ${existing.filterKind}`);
       return false;
     }
     if (existing?.filterEnabled === enabled && containsValues(filterSettings, existing.filterSettings)) return true;
     changes += 1;
-    console.log(`${would}${existing ? 'UPDATE' : 'CREATE'}  ${sourceName} / ${filterName}`);
+    console.log(`${would}${existing ? 'UPDATE' : 'CREATE'}  ${label}${sourceName} / ${filterName}`);
     if (dryRun) return true;
     if (existing) {
       await client.call('SetSourceFilterSettings', { sourceName, filterName, filterSettings, overlay: true });
@@ -118,7 +120,7 @@ export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun
         !wanted.has(filter.filterName);
       if (stale) {
         changes += 1;
-        console.log(`${would}REMOVE  ${scene} / ${filter.filterName} (no bound item)`);
+        console.log(`${would}REMOVE  ${label}${scene} / ${filter.filterName} (no bound item)`);
         if (!dryRun) await client.call('RemoveSourceFilter', { sourceName: scene, filterName: filter.filterName });
       }
     }
@@ -140,7 +142,7 @@ export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun
   for (const { scene, source, kind, boundsAlignment } of bindings) {
     const item = itemsByScene.get(scene)?.find((candidate) => candidate.sourceName === source);
     if (!item) {
-      console.log(`SKIP    ${scene} has no item "${source}"`);
+      console.log(`SKIP    ${label}${scene} has no item "${source}"`);
       continue;
     }
 
@@ -169,7 +171,7 @@ export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun
       );
       if (transformChanges.length) {
         console.log(
-          `${would}TRANSFORM ${scene} / ${source}: ${transformChanges.map(([key, value]) => `${key}=${String(value)}`).join(', ')}`,
+          `${would}TRANSFORM ${label}${scene} / ${source}: ${transformChanges.map(([key, value]) => `${key}=${String(value)}`).join(', ')}`,
         );
         await setTransform(scene, item.sceneItemId, {
           ...Object.fromEntries(transformChanges),
@@ -234,7 +236,7 @@ export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun
       if (borderColor) {
         const hasColorFilter = (await filtersOf(source)).some((filter) => filter.filterName === borderColor.filter);
         if (!hasColorFilter) {
-          console.log(`SKIP    ${source} has no "${borderColor.filter}" filter to color (borderColor.filter)`);
+          console.log(`SKIP    ${label}${source} has no "${borderColor.filter}" filter to color (borderColor.filter)`);
         } else {
           const settings = (
             await client.call('GetSourceFilter', { sourceName: source, filterName: borderColor.filter })
@@ -267,12 +269,12 @@ export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun
       const transformChanges = Object.entries(wanted).filter(([key, value]) => transform[key] !== value);
       if (transformChanges.length) {
         console.log(
-          `${would}TRANSFORM ${config.container} / ${textScene}: ${transformChanges.map(([key, value]) => `${key}=${String(value)}`).join(', ')}`,
+          `${would}TRANSFORM ${label}${config.container} / ${textScene}: ${transformChanges.map(([key, value]) => `${key}=${String(value)}`).join(', ')}`,
         );
         await setTransform(config.container, item.sceneItemId, Object.fromEntries(transformChanges));
       }
     } else {
-      console.log(`SKIP    ${config.container} has no item "${textScene}"`);
+      console.log(`SKIP    ${label}${config.container} has no item "${textScene}"`);
     }
   }
 

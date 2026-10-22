@@ -23,6 +23,9 @@ Before finishing a change, run typecheck, lint, format check, test coverage, and
 ## Layout
 
 - `src/constants/`, `src/lib/`, `src/types/`: source, one export group per file.
+- `src/types/ScenesConfig.ts`: the config. Its `canvases` hold each OBS canvas's container, options, participants, and
+  standby; scenes and modifiers are shared. Everything that lays out or checks one canvas works from that canvas's
+  view, a `CanvasScenesConfig` from `resolveCanvasConfig`, which has the version 3 shape, so it stays canvas-agnostic.
 - `src/index.ts`: the only index file and the library entry; `export *` for every file (`export type *` for type-only
   files). Do not add per-directory index files.
 - `src/settings.ts`: the entry behind `@eliasthompson/obs-layout-firebot/settings`: the constants, settings builders,
@@ -60,6 +63,12 @@ Before finishing a change, run typecheck, lint, format check, test coverage, and
   entries, then the platform default. Add new ones to `tools/lib/environment.ts`, `.env.example`, and the README.
 - The tools run on Windows, macOS, and Linux. Anything platform-specific goes through `process.platform` with a case
   per platform, not a separate script per OS.
+- Requests are built with names, as for OBS's main canvas. A request's `canvasUuid` limits every name in it to that
+  canvas, inputs included, though inputs belong to the main canvas, so never add it across the board: requests for
+  another canvas go through `addressRequest` or `addressClient`, which address its scenes and sources by UUID from a
+  `readAddressBook`. Its program scene switches through Aitum Vertical's vendor requests (`aitumProgram.ts`), since
+  OBS has none for another canvas. Landscape-only configs never touch canvas requests, so they keep the OBS 28
+  minimum.
 - obs-move-transition setting values live in `src/constants/moveTransition.ts` with the header they come from. Do not
   use a Move Value filter in its "settings" mode on a color source: it rewrites the color.
 - Changes to the request batch order (disable, write, sleep, enable) need a reason in a comment; the order works

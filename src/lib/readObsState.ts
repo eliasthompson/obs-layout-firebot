@@ -1,7 +1,7 @@
 import type { ObsClient } from '@/lib/connectObs';
 import type { ObsRequest } from '@/types/ObsRequest';
 import type { ObsSceneItem, ObsState } from '@/types/ObsState';
-import type { LayoutRegionName, ScenesConfig } from '@/types/ScenesConfig';
+import type { CanvasScenesConfig, LayoutRegionName } from '@/types/ScenesConfig';
 
 import { WIDTH_FILTER_NAME } from '@/constants/filterNames';
 import { REQUEST_BATCH_EXECUTION_SERIAL_REALTIME } from '@/constants/obsWebSocket';
@@ -19,7 +19,7 @@ interface ReportedSceneItem extends Omit<ObsSceneItem, 'sourceSize'> {
  * scene's items, for how tall it renders, and its current font size. A config that needs neither reads nothing.
  * Anything OBS cannot answer is left out, and the move batch reports the missing item itself.
  */
-export const readObsState = async (client: ObsClient, config: ScenesConfig): Promise<ObsState> => {
+export const readObsState = async (client: ObsClient, config: CanvasScenesConfig): Promise<ObsState> => {
   const state: ObsState = { sceneItems: {}, borderWidths: {}, fontSizes: {} };
   const bindings = Object.values(config.participants).flatMap((entry) => Object.values(entry.sources));
   // A text is sized when any layer sizes it: the config's regions, the participant's, or any scene's settings for it

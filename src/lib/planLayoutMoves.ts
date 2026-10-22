@@ -6,12 +6,12 @@ import type { Binding, MoveStep, SourceSize } from '@/types/MoveStep';
 import type { ObsSceneItem, ObsState } from '@/types/ObsState';
 import type { Rect } from '@/types/Rect';
 import type {
+  CanvasScenesConfig,
   LayoutRegionName,
   ParticipantPoolEntry,
   RegionSettings,
   SceneBinding,
   SceneParticipant,
-  ScenesConfig,
 } from '@/types/ScenesConfig';
 
 import { DEFAULT_DURATION, DEFAULT_STANDBY_TEXT_GAP } from '@/constants/filterNames';
@@ -39,7 +39,7 @@ interface Target {
 /** The scene's value, else the config's, else the library default. `undefined` never wins. */
 const resolveOption = <Name extends keyof typeof LAYOUT_OPTIONS_DEFAULT>(
   name: Name,
-  config: ScenesConfig,
+  config: CanvasScenesConfig,
   sceneOptions: LayoutOptions | undefined,
 ) => sceneOptions?.[name] ?? config.options?.[name] ?? LAYOUT_OPTIONS_DEFAULT[name];
 
@@ -65,14 +65,14 @@ const fontSizeFor = (
 };
 
 /** A shown participant's settings for a region: the config's, their own, and the scene's, layered. */
-const settingsFor = (config: ScenesConfig, participant: SceneParticipant, region: LayoutRegionName) =>
+const settingsFor = (config: CanvasScenesConfig, participant: SceneParticipant, region: LayoutRegionName) =>
   resolveRegionSettings(config, config.participants[participant.layout], region, participant.regions);
 
 /**
  * The smallest name height the shown participants' text sources ask for: the inset on both sides plus the smallest
  * font size. `undefined` when no binding sets a smallest font, or when the options already set `nameHeightMin`.
  */
-const derivedNameHeightMin = (config: ScenesConfig, scene: SceneBinding, shown: SceneParticipant[]) => {
+const derivedNameHeightMin = (config: CanvasScenesConfig, scene: SceneBinding, shown: SceneParticipant[]) => {
   if (scene.options?.nameHeightMin !== undefined || config.options?.nameHeightMin !== undefined) return undefined;
 
   const minimums = shown.flatMap((participant) => {
@@ -85,7 +85,7 @@ const derivedNameHeightMin = (config: ScenesConfig, scene: SceneBinding, shown: 
 
 /** The layout of the scene's participants, with ratios declared for inset regions holding inside the inset. */
 const layoutMetrics = (
-  config: ScenesConfig,
+  config: CanvasScenesConfig,
   scene: SceneBinding,
   shown: SceneParticipant[],
   configs: LayoutConfig[],
@@ -125,7 +125,7 @@ const layoutMetrics = (
  * @param modifiers - Names of the modifiers switched on.
  */
 export const planLayoutMoves = (
-  config: ScenesConfig,
+  config: CanvasScenesConfig,
   sceneKey: string,
   state: ObsState = { sceneItems: {}, borderWidths: {}, fontSizes: {} },
   modifiers: readonly string[] = [],

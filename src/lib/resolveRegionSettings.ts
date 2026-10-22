@@ -1,9 +1,9 @@
 import type {
+  CanvasScenesConfig,
   LayoutRegionName,
   ParticipantPoolEntry,
   RegionSettings,
   SceneRegionSettingsMap,
-  ScenesConfig,
 } from '@/types/ScenesConfig';
 
 /** A layer's settings for a region, without the fields it leaves undefined, so they fall through to the layer below. */
@@ -20,7 +20,7 @@ const set = (settings: RegionSettings | undefined): RegionSettings =>
  * @param sceneRegions - The scene's region settings for the participant, when planning a scene.
  */
 export const resolveRegionSettings = (
-  config: Pick<ScenesConfig, 'regions'>,
+  config: Pick<CanvasScenesConfig, 'regions'>,
   entry: Pick<ParticipantPoolEntry, 'regions'>,
   region: LayoutRegionName,
   sceneRegions?: SceneRegionSettingsMap,

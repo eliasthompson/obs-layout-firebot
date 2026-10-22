@@ -1,7 +1,8 @@
-// Applies a scene key while sampling screenshots of a source, to look at a transition frame by frame. Without
-// --save it reports near-white pixel counts per frame (handy for spotting flashes); with --save it writes PNG frames.
+// Applies a scene key while sampling screenshots of a source on one canvas, to look at a transition frame by frame.
+// Without --save it reports near-white pixel counts per frame (handy for spotting flashes); with --save it writes PNG
+// frames. The canvas is the first that shows the scene unless --canvas names one, and the source its container.
 //
-//   obs-layout-firebot obs:capture "<scene key>" [--source "[Scene] Content"] [--save frames/]
+//   obs-layout-firebot obs:capture "<scene key>" [--canvas portrait] [--source "[Scene] Content"] [--save frames/]
 //     [--watch-input "[Border] Camera 1"] [--disable-filters Stroke,Shadow] [--modifiers Keyed,Timer] [--config config/scenes.ts]
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -9,8 +10,10 @@ import { parseArgs } from 'node:util';
 
 import { connectObs } from '@/lib/connectObs';
 import { planLayoutMoves } from '@/lib/planLayoutMoves';
+import { resolveCanvasConfig } from '@/lib/resolveCanvasConfig';
 import { runLayout } from '@/lib/runLayout';
 
+import { openCanvases } from '../lib/canvases';
 import { DEFAULT_CONFIG_PATH, loadConfig, sleep, toolObsConnection } from '../lib/environment';
 
 const analyzeBmp = (buffer: Buffer) => {
@@ -39,6 +42,7 @@ export const obsCapture = async (args: string[]) => {
     args,
     allowPositionals: true,
     options: {
+      canvas: { type: 'string' },
       config: { type: 'string', default: DEFAULT_CONFIG_PATH },
       'disable-filters': { type: 'string' },
       modifiers: { type: 'string' },
@@ -58,12 +62,24 @@ export const obsCapture = async (args: string[]) => {
       ?.split(',')
       .map((name) => name.trim())
       .filter(Boolean) ?? [];
-  const shotSource = values.source ?? config.container;
+  const canvasKey =
+    values.canvas ??
+    Object.keys(config.canvases).find((key) => Object.hasOwn(resolveCanvasConfig(config, key).scenes, sceneKey));
+  if (canvasKey === undefined) throw new Error(`no canvas shows "${sceneKey}"`);
+  const canvasConfig = resolveCanvasConfig(config, canvasKey);
+  const shotSource = values.source ?? canvasConfig.container;
   const disableFilters = values['disable-filters']?.split(',') ?? [];
-  const steps = planLayoutMoves(config, sceneKey, undefined, modifiers);
+  const steps = planLayoutMoves(canvasConfig, sceneKey, undefined, modifiers);
   const borders = steps.filter((step) => step.kind === 'border').map((step) => step.source);
 
-  const client = await connectObs(connection);
+  const connected = await connectObs(connection);
+  // Screenshots and filter switches reach the canvas through its own addressing
+  const canvas = (await openCanvases(connected, config, [canvasKey])).at(0);
+  if (!canvas) {
+    connected.close();
+    throw new Error(`OBS does not have the "${canvasKey}" canvas`);
+  }
+  const { client } = canvas;
 
   let saved = 0;
   const snapshot = async () => {

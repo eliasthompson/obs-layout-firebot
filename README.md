@@ -16,6 +16,13 @@ into place together.
 | Firebot         | 5.65.0             | First release on Node 22 (Electron 39), whose global `WebSocket` the script uses to reach OBS. The rest needs 5.54.0, which added the built-in OBS integration. |
 | Node.js         | 22.4 (for the CLI) | The global `WebSocket` became stable in 22.4; the tools use it to reach OBS.                                                                                    |
 
+A [canvas](#canvases) other than OBS's main one, such as the vertical canvas of Twitch Dual Format, also needs:
+
+| Software       | Minimum | Why                                                                                                                                      |
+| -------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| OBS Studio     | 32.1    | Ships obs-websocket 5.7.2, whose scene and filter requests take a canvas, and which lists the canvases.                                  |
+| Aitum Vertical | 1.6.3   | Puts its vertical canvas on OBS's own canvases (1.6.0) and switches that canvas's program scene; 1.6.3 fixed editing transforms on 32.1. |
+
 The tools run on Windows, macOS, and Linux.
 
 ## How it works
@@ -23,15 +30,16 @@ The tools run on Windows, macOS, and Linux.
 The script runs inside Firebot. When a preset calls it with a scene key, it:
 
 1. reads the layout config from a Firebot custom variable (`layoutScenes` by default),
-2. runs `generateLayout` for the participants that scene shows,
+2. runs `generateLayout` for the participants that scene shows, on every [canvas](#canvases) that shows it,
 3. opens its own obs-websocket connection, using the credentials from Firebot's OBS integration,
 4. with [standby screens](#standby-screens) configured, reads what OBS shows now, so it knows whether the transition
    starts from standby, and
-5. sends one request batch, executed in sync with OBS's video frames, that writes and enables a set of Move
-   Transition filters. Moves that belong after others wait through the filters' own start delay, so the whole
-   transition is still one batch, and the next preset cuts it short at any point. When program shows another scene,
-   the batch ends by switching program to the container, so its scene transition starts with the moves. When the
-   container is already on program, no scene transition runs, and preview stays yours for other work.
+5. sends one request batch for every canvas, executed in sync with OBS's video frames, that writes and enables a set
+   of Move Transition filters. Moves that belong after others wait through the filters' own start delay, so the whole
+   transition is still one batch, and the next preset cuts it short at any point. When a canvas's program shows
+   another scene, the batch ends by switching it to the canvas's container, so its scene transition starts with the
+   moves. When the container is already on program, no scene transition runs, and preview stays yours for other
+   work.
 
 The filters do the animating:
 
@@ -88,6 +96,8 @@ every machine makes the same presets and there is nothing else to keep. Keep the
 - For standby screens, a **standby text** scene in the container, below the participant layouts, holding one text
   source per screen, and any standby widgets as items of the container. `obs:deploy` crops the text scene at the canvas
   center.
+- For a second canvas, such as Aitum Vertical's: the same container, layout scenes, and items on that canvas, with
+  sources of its own; see [Canvases](#canvases).
 
 ## Firebot setup
 
@@ -111,13 +121,57 @@ your editor completes and checks every field as you type, and you can add commen
 is the complete example; copy it and bind your own scene and source names:
 
 ```ts
-import type { ScenesConfig } from '@eliasthompson/obs-layout-firebot';
+import type { ParticipantPoolEntry, ScenesConfig } from '@eliasthompson/obs-layout-firebot';
+
+// One person's sources on a canvas. OBS shares source names across canvases, so each canvas's copies get a suffix
+const person = (n: number, suffix = ''): ParticipantPoolEntry => ({
+  sources: {
+    contentMain: { source: `[Group] Content ${n}${suffix}`, border: `[Border] Content ${n}${suffix}` },
+    info: { source: `[Widget] Info ${n}${suffix}`, border: `[Border] Info ${n}${suffix}` },
+    camera: { source: `[Group] Camera ${n}${suffix}`, border: `[Border] Camera ${n}${suffix}` },
+    name: { source: `[Text] Name ${n}${suffix}` },
+  },
+});
 
 export default {
-  // OBS scene that holds one nested layout scene per participant
-  container: '[Scene] Content',
-  // Canvas options of obs-layout-generator, for every scene
-  options: { canvasPadding: 24, canvasMarginTop: 105, canvasMarginBottom: 105, layoutGap: 18, regionBorder: 6 },
+  // Each OBS canvas the presets lay out, by a key of your choosing; a preset applies its scene on every canvas that
+  // shows it, in one batch
+  canvases: {
+    landscape: {
+      // OBS scene that holds one nested layout scene per participant
+      container: '[Scene] Content',
+      // Canvas options of obs-layout-generator, for every scene on this canvas
+      options: { canvasPadding: 24, canvasMarginTop: 105, canvasMarginBottom: 105, layoutGap: 18, regionBorder: 6 },
+      // Every layout scene on this canvas, with the OBS item (and border) that fills each region, and what is true of
+      // that participant in every composition
+      participants: {
+        '[Layout] Person 1': person(1),
+        // A guest who always streams keyed
+        '[Layout] Person 2': { ...person(2), config: { camera: { isGreenScreen: true } } },
+      },
+      // The scene in the container that holds the standby texts, the height of the standby line, and how far past
+      // the line a text shows
+      standby: { textScene: '[Widget] Standby Text', lineHeight: 540, textGap: 30 },
+    },
+    // Optional: Aitum Vertical's canvas, by the name OBS lists it under; see Canvases. Its scene names may repeat the
+    // main canvas's, and the scenes name participants by the same keys
+    portrait: {
+      canvas: 'Aitum Vertical',
+      container: '[Scene] Content',
+      options: {
+        canvasWidth: 1080,
+        canvasHeight: 1920,
+        orientation: 'portrait',
+        canvasPadding: 24,
+        canvasMarginTop: 144,
+        canvasMarginBottom: 422,
+        layoutGap: 18,
+        regionBorder: 6,
+      },
+      participants: { '[Layout] Person 1': person(1, ' (V)') },
+      standby: { textScene: '[Widget] Standby Text', lineHeight: 540, textGap: 30 },
+    },
+  },
   // Pixels the border sources' shadow filters add outside the border on every side
   borderPadding: 9,
   // Optional: the filter on each border that carries its color, so another program can recolor the borders through
@@ -125,32 +179,13 @@ export default {
   // borderColor: { filter: 'Stroke', duration: 500 },
   // Move duration in milliseconds
   duration: 300,
-  // The layout config every participant starts from, under their pool config and the scene's; see Layers and modifiers
+  // The layout config every participant starts from, under the canvas's, their pool config, and the scene's; see
+  // Layers and modifiers
   config: { camera: { mainAspectRatio: '4:3' } },
-  // How every participant's sources sit in their regions, under each participant's own regions and the scenes'
+  // How every participant's sources sit in their regions, under the canvas's, each participant's own, and the scenes'
   regions: {
     info: { inset: 12, boundsAlignment: 'top center' },
     name: { inset: 12, fontSizeMin: 24, fontSizeMax: 48 },
-  },
-  // Every layout scene, with the OBS item (and border) that fills each region, and what is true of that participant
-  // in every composition
-  participants: {
-    '[Layout] Person 1': {
-      sources: {
-        contentMain: { source: '[Group] Content 1', border: '[Border] Content 1' },
-        info: { source: '[Widget] Info 1', border: '[Border] Info 1' },
-        camera: { source: '[Group] Camera 1', border: '[Border] Camera 1' },
-        name: { source: '[Text] Name 1' },
-      },
-    },
-    '[Layout] Person 2': {
-      sources: {
-        contentMain: { source: '[Group] Content 2', border: '[Border] Content 2' },
-        camera: { source: '[Group] Camera 2', border: '[Border] Camera 2' },
-      },
-      // A guest who always streams keyed
-      config: { camera: { isGreenScreen: true } },
-    },
   },
   // One preset per scene key: the participants it shows, in layout order, each with what the composition changes
   scenes: {
@@ -167,11 +202,16 @@ export default {
       ],
       duration: 500,
       modifiers: { Names: true },
+      // The vertical canvas has no second person, so this scene leaves it as it is
+      canvases: { portrait: false },
     },
     // Standby screens: every participant collapses into a line at the canvas center and the text slides out from
     // behind it; `line` names whose main border is the line, the first participant when left out
     '[Standby] Starting Soon': { standby: { text: '[Text] Starting Soon' } },
-    '[Standby] Be Right Back': { standby: { text: '[Text] Be Right Back', line: '[Layout] Person 2' } },
+    '[Standby] Be Right Back': {
+      standby: { text: '[Text] Be Right Back', line: '[Layout] Person 2' },
+      canvases: { portrait: false },
+    },
   },
   // Layout configs that presets switch on and off over any scene: an "<name> On" and "<name> Off" preset each, plus
   // "Reset Modifiers"; see Layers and modifiers
@@ -182,9 +222,6 @@ export default {
     Timer: { config: { info: { aspectRatio: '250:49', isMainAttached: true } } },
     Names: { config: { hasName: true } },
   },
-  // The scene in the container that holds the standby texts, the height of the standby line, and how far past the
-  // line a text shows
-  standby: { textScene: '[Widget] Standby Text', lineHeight: 540, textGap: 30 },
   // Optional: where the tools find OBS and Firebot when the defaults do not fit this machine; see Machine settings
   // obs: { sceneCollection: 'Untitled', executable: 'C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe' },
   // firebot: { profile: 'Main', apiUrl: 'http://localhost:7472/api/v1', variable: 'layoutScenes' },
@@ -193,21 +230,31 @@ export default {
 
 | Field           | Meaning                                                                                                                                                                |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `container`     | OBS scene whose items are the participant layout scenes.                                                                                                               |
-| `options`       | `LayoutOptions` for the canvas, as in obs-layout-generator.                                                                                                            |
+| `canvases`      | The OBS canvases to lay out, by a key of your choosing, each with the fields below; see [Canvases](#canvases).                                                         |
 | `borderPadding` | Pixels the border sources' filters add outside the border on every side. Default `0`.                                                                                  |
 | `borderColor`   | The filter on each border that carries its color, for recoloring; see [Border colors](#border-colors).                                                                 |
 | `duration`      | Move duration in milliseconds. Default `300`.                                                                                                                          |
 | `config`        | The `LayoutConfig` every participant starts from; see [Layers and modifiers](#layers-and-modifiers).                                                                   |
 | `regions`       | Region settings every participant starts from: `inset`, `boundsAlignment`, `fontSizeMax`, `fontSizeMin` per region; see [Layers and modifiers](#layers-and-modifiers). |
-| `participants`  | Every layout scene the installation knows, keyed by scene name, with the source (and border) for each region and the participant's own `config` and `regions`.         |
 | `scenes`        | Compositions by scene key: the participants shown, in layout order, each with the `config` the composition changes, and the modifiers the scene forces.                |
 | `modifiers`     | `LayoutConfig`s presets switch on and off over any scene; see [Layers and modifiers](#layers-and-modifiers).                                                           |
-| `standby`       | Needed by standby scenes: `textScene`, `lineHeight`, `textGap`; see [Standby screens](#standby-screens).                                                               |
 | `obs`           | Optional. `url` and `password` are used over Firebot's OBS integration settings; see [Machine settings].                                                               |
 | `firebot`       | Optional. Where the tools find Firebot; see [Machine settings].                                                                                                        |
 
-A scene entry may carry its own `options` and `duration`, and a `standby` entry that makes it a standby screen.
+Each canvas takes:
+
+| Field          | Meaning                                                                                                                                                               |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `canvas`       | Optional. The OBS canvas by name, as OBS lists it, such as `Aitum Vertical`; OBS's main canvas when left out.                                                         |
+| `container`    | OBS scene whose items are the canvas's participant layout scenes.                                                                                                     |
+| `options`      | `LayoutOptions` for the canvas, as in obs-layout-generator.                                                                                                           |
+| `config`       | Optional. This canvas's `LayoutConfig` layer, over the config's and under each participant's.                                                                         |
+| `regions`      | Optional. This canvas's region settings, over the config's and under each participant's.                                                                              |
+| `participants` | Every layout scene on the canvas, keyed by the name scenes use for it, with the source (and border) for each region and the participant's own `config` and `regions`. |
+| `standby`      | Needed for standby scenes on this canvas: `textScene`, `lineHeight`, `textGap`; see [Standby screens](#standby-screens).                                              |
+
+A scene entry may carry its own `options` and `duration`, a `standby` entry that makes it a standby screen, and
+`canvases`, what it changes on each canvas; see [Canvases](#canvases).
 Region names are those of `LayoutMetric`: `contentMain`,
 `camera`, `contentAux`, `info`, `name`. Each bound source takes a `source` and an optional `border`, the OBS items.
 How a source sits in its region is set per region in `regions`: on the config for every participant, on a pool entry
@@ -244,14 +291,15 @@ can change one field of a region without restating the rest, and `null` on any l
 
 1. the config's `config`: what every participant starts from, such as the camera's ratio when it takes the main
    column;
-2. the participant's pool `config`: what is true of them in every composition, such as a guest who always streams
+2. the canvas's `config`: what differs on that canvas, such as names on a vertical canvas only;
+3. the participant's pool `config`: what is true of them in every composition, such as a guest who always streams
    keyed;
-3. the scene's `config` for them: what the composition changes, such as the content shape;
-4. every modifier in effect, in the order `modifiers` lists them.
+4. the scene's `config` for them: what the composition changes, such as the content shape;
+5. every modifier in effect, in the order `modifiers` lists them.
 
-Region settings layer the same way, field by field per region: the config's `regions`, then the pool entry's, then
-the scene participant's. The bounds alignment is the exception: `obs:deploy` sets it on the item once, so it layers
-over the config and the pool entry only.
+Region settings layer the same way, field by field per region: the config's `regions`, then the canvas's, then the
+pool entry's, then the scene participant's. The bounds alignment is the exception: `obs:deploy` sets it on the item
+once, so it layers over the config, the canvas, and the pool entry only.
 
 Modifiers are the switches: named layout configs that presets switch on and off at runtime, over whatever scene is
 up. A region config in any layer switches the region on, so a region that only a modifier should show, such as a
@@ -262,6 +310,30 @@ Firebot variable named after the config variable with `State` added, and `firebo
 key, an `<name> On` and `<name> Off` preset per modifier, and `Reset Modifiers`. A modifier preset run before any
 scene preset only remembers the modifier. With the example above, eight content shapes with a timer and a keyed
 camera as modifiers make eight scene presets and five modifier presets instead of 32 scenes.
+
+### Canvases
+
+`canvases` lists every OBS canvas the presets lay out. Most installations have one, OBS's main canvas, which leaves out
+`canvas`. A second, such as the vertical canvas [Aitum Vertical](https://github.com/Aitum/obs-vertical-canvas) adds for Twitch Dual Format, names
+the OBS canvas in `canvas`, and needs OBS 32.1 or later and Aitum Vertical 1.6.3 or later; a config with only the main
+canvas needs neither.
+
+- **One preset, every canvas.** A preset applies its scene on every canvas that shows it, in one frame-synced batch,
+  so the canvases move together. Scenes, modifiers, and the standby line name participants by their key in each
+  canvas's `participants`, so the same keys on every canvas let one list of scenes serve them all.
+- **A scene can change per canvas.** A scene's `canvases` entry for a canvas replaces its `participants` there or adds
+  `options`, and `false` leaves that canvas as it is when the preset runs. A canvas without every participant a scene
+  shows, or without `standby` settings for a standby scene, leaves the scene out too; `firebot:deploy` warns about
+  those unless the scene says `false` for that canvas, and a scene no canvas shows is an error.
+- **Each canvas has its own scenes and sources.** OBS lets scene names repeat across canvases, so the vertical canvas
+  can have its own `[Scene] Content` and `[Layout] Person 1`. Source names are shared across canvases, and the layout
+  fades and resizes its sources, so each canvas needs its own groups, borders, and name texts, for example with a
+  ` (V)` suffix. A capture, such as a camera, can still be shared by nesting it in each canvas's group.
+- **Program switching.** The main canvas's container goes on program through OBS, another canvas's through Aitum
+  Vertical, each only when that canvas shows another scene. OBS has no program scene for a canvas other than its main
+  one, so no other plugin's canvas can be switched.
+- **A missing canvas is skipped.** When OBS does not have a canvas the config names, for example without Aitum
+  Vertical, the script lays out the rest and warns in Firebot's log, and the tools report it and deploy the rest.
 
 ### Border colors
 
@@ -371,14 +443,14 @@ Run as `npx obs-layout-firebot <command>`. Commands are grouped by the program t
 the config takes `--config <path>` (default `config/scenes.ts`); every command that changes something takes
 `--dry-run` to report what it would do instead, and `--yes` to skip its questions.
 
-| Command           | What it does                                                                                                                                                                                                 |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `obs:deploy`      | Sets OBS up for the config, then asks to restart OBS when the item transitions need setting; see below. `--no-restart`.                                                                                      |
-| `obs:restart`     | Restarts OBS, never forcibly, after checking that it is not streaming or recording.                                                                                                                          |
-| `obs:verify`      | `obs:verify "<scene key>"`: applies a scene from this machine and compares every item with the plan; exits 1 on a mismatch. `--modifiers Keyed,Timer` applies it as the script would with those switched on. |
-| `obs:capture`     | `obs:capture "<scene key>" --save frames/`: screenshots during a transition, or white-pixel counts without it. `--modifiers` as above.                                                                       |
-| `firebot:deploy`  | Checks, stores, installs the script, and asks to restart for new presets or a new script; see below. `--skip-obs`.                                                                                           |
-| `firebot:restart` | Restarts Firebot, never forcibly, around installing the presets and turning on the two settings above.                                                                                                       |
+| Command           | What it does                                                                                                                                                                                                                                    |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `obs:deploy`      | Sets OBS up for the config on every canvas, then asks to restart OBS when the item transitions need setting; see below. `--no-restart`.                                                                                                         |
+| `obs:restart`     | Restarts OBS, never forcibly, after checking that it is not streaming or recording.                                                                                                                                                             |
+| `obs:verify`      | `obs:verify "<scene key>"`: applies a scene from this machine and compares every item on every canvas with the plan; exits 1 on a mismatch. `--modifiers Keyed,Timer` applies it as the script would with those switched on.                    |
+| `obs:capture`     | `obs:capture "<scene key>" --save frames/`: screenshots of a canvas's container during a transition, or white-pixel counts without it. `--canvas portrait` picks the canvas, the first that shows the scene by default. `--modifiers` as above. |
+| `firebot:deploy`  | Checks, stores, installs the script, and asks to restart for new presets or a new script; see below. `--skip-obs`.                                                                                                                              |
+| `firebot:restart` | Restarts Firebot, never forcibly, around installing the presets and turning on the two settings above.                                                                                                                                          |
 
 Version 2 renamed and regrouped the commands; see [Upgrading from 1.x](#upgrading-from-1x).
 
@@ -399,11 +471,13 @@ that is replaced is backed up next to it, with a timestamp.
 
 `obs:deploy` is the one step for changes on the OBS side, such as new sources, renamed items, or a new participant:
 
-1. It runs the setup over the websocket: filters created or updated, bounds types set, stale Move Source filters
-   removed, the standby text scene cropped. This part is idempotent and is all that runs without the restart.
+1. It runs the setup over the websocket on every canvas OBS has: filters created or updated, bounds types set, stale
+   Move Source filters removed, the standby text scene cropped. This part is idempotent and is all that runs without
+   the restart. A canvas OBS does not have is reported and skipped.
 2. It asks which scene collection OBS has loaded, and whether OBS is streaming or recording.
 3. It sets every toggled item's show and hide transition in the collection file, which only that file holds and OBS
-   only reads at startup, so it asks to restart OBS around writing it. OBS saves the collection on exit, so the
+   only reads at startup, so it asks to restart OBS around writing it. Scene names can repeat across canvases, so each
+   scene is found on its own canvas. OBS saves the collection on exit, so the
    setup's filters are in the file before it is edited. When every item already has its transition, and the saved
    file holds every bound item, there is nothing to write and OBS is not restarted. `--transition none|fade` and
    `--duration` set what the items get (default `none`, `300`). `--no-restart`, or declining, leaves the restart for a
@@ -413,9 +487,10 @@ that is replaced is backed up next to it, with a timestamp.
 
 `firebot:deploy` is the one step for config changes:
 
-1. It reads every bound scene, item, and filter back from OBS and refuses to deploy when something is missing, so a
-   typo in a source name is caught before a preset ever fails. Missing filters point at `obs:deploy`. It waits for OBS
-   to be started when it is not running; pass `--skip-obs` to deploy without it.
+1. It checks the scenes and modifiers, then reads every bound scene, item, and filter back from OBS on every canvas,
+   and refuses to deploy when something is missing, so a typo in a source name is caught before a preset ever fails.
+   Missing filters point at `obs:deploy`. A canvas OBS does not have is reported and skipped. It waits for OBS to be
+   started when it is not running; pass `--skip-obs` to check the scenes and modifiers alone.
 2. It stores the config in the `layoutScenes` variable (or `firebot.variable`). The next preset run uses it; nothing
    needs a restart.
 3. It installs the built script into the profile when it differs from the installed one, and warns when the
@@ -438,6 +513,18 @@ change the config instead.
 - **Another participant**: build a second layout scene in OBS like the first, add it to `participants`, and list it
   in the scenes that show it. The library splits participants into balanced rows.
 - Then `firebot:deploy`, which adds the preset for the new key and offers the restart.
+
+## Upgrading from 3.x
+
+- **Canvases.** `container`, `options`, `participants`, and `standby` move into a canvas under `canvases`, such as
+  `canvases: { landscape: { container, options, participants, standby } }`; everything else stays where it is. The
+  scene keys, and so the preset ids, are unchanged, so nothing in Firebot needs pointing at a preset again. A 3.x
+  config is refused with a message saying so.
+- **More canvases.** A second canvas is optional; see [Canvases](#canvases) for what it needs in OBS.
+- **Library.** Functions that lay out or check one canvas take its view of the config, a `CanvasScenesConfig`, which
+  `resolveCanvasConfig` gives. `findConfigProblems` checks one canvas against OBS, and `findSceneProblems` checks the
+  scenes and modifiers. `runLayout` reports what it did on each canvas in `canvases`, and `buildMoveRequests` is built
+  from `buildMovePhases` and `joinMovePhases`, which join the canvases' moves into one batch.
 
 ## Upgrading from 2.x
 

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ScenesConfig } from '@/types/ScenesConfig';
+import type { CanvasScenesConfig } from '@/types/ScenesConfig';
 
 import { resolveParticipantConfig } from '@/lib/resolveParticipantConfig';
 
-const config: Pick<ScenesConfig, 'config' | 'modifiers' | 'participants'> = {
+const config: Pick<CanvasScenesConfig, 'config' | 'modifiers' | 'participants'> = {
   config: { hasName: false, info: { aspectRatio: '250:49', isMainAttached: true } },
   participants: {
     Me: { sources: {}, config: { camera: { mainAspectRatio: '4:3' } } },
