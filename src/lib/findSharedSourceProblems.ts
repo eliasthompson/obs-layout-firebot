@@ -2,6 +2,7 @@ import type { MoveStep } from '@/types/MoveStep';
 import type { ConfigProblem } from '@/types/ObsInventory';
 import type { LayoutRegionName, ScenesConfig } from '@/types/ScenesConfig';
 
+import { listOverlays } from '@/lib/listOverlays';
 import { planLayoutMoves } from '@/lib/planLayoutMoves';
 import { resolveCanvas, type ResolvedCanvas } from '@/lib/resolveCanvasConfig';
 import { resolveRegionSettings } from '@/lib/resolveRegionSettings';
@@ -27,11 +28,13 @@ const sameMove = (a: MoveStep | undefined, b: MoveStep | undefined) =>
   a?.visible === b?.visible && a?.delay === b?.delay && a?.duration === b?.duration;
 
 /**
- * Sources bound on more than one canvas, and every way that sharing would break. A canvas writes a source's fade on the
- * source itself, so canvases can share it only when every preset fades it alike on all of them; its position and size
- * are each canvas's own item. Borders are sized, and texts may have their font sized, on the source too, per canvas,
- * so those can never be shared. A preset that leaves one sharing canvas as it is while another changes the source is
- * a problem as well.
+ * Sources bound on more than one canvas, region sources and standby widgets alike, and every way that sharing would
+ * break. A canvas writes a source's fade on the source itself, so canvases can share it only when every preset fades
+ * it alike on all of them; its position and size are each canvas's own item. Borders are sized, and texts may have
+ * their font sized, on the source too, per canvas, so those can never be shared. A preset that leaves one sharing
+ * canvas as it is while another changes the source is a problem as well. Standby texts only move, so they are never a
+ * problem. Delays that depend on what OBS shows are the same on every canvas, since `runLayout` holds every canvas's
+ * regions back when any canvas's overlays leave first.
  *
  * @param config - The whole config.
  * @returns An error per source that cannot be shared, and per preset and source the canvases would fade differently.
@@ -44,14 +47,18 @@ export const findSharedSourceProblems = (config: ScenesConfig): ConfigProblem[] 
   );
   const uses = new Map<string, SourceUse[]>();
 
+  const add = (source: string, use: SourceUse) => uses.set(source, [...(uses.get(source) ?? []), use]);
   for (const [canvas, { config: view }] of Object.entries(canvases)) {
     for (const entry of Object.values(view.participants)) {
       for (const [region, binding] of Object.entries(entry.sources)) {
         const settings = resolveRegionSettings(view, entry, region as LayoutRegionName);
-        const add = (source: string, use: SourceUse) => uses.set(source, [...(uses.get(source) ?? []), use]);
         add(binding.source, { canvas, isBorder: false, sizesFont: sizesFont(settings) });
         if (binding.border) add(binding.border, { canvas, isBorder: true, sizesFont: false });
       }
+    }
+    // A standby widget fades on the source too; a standby text only ever moves, through each canvas's own item
+    for (const { binding } of listOverlays(view)) {
+      if (binding.kind === 'widget') add(binding.source, { canvas, isBorder: false, sizesFont: false });
     }
   }
 

@@ -339,10 +339,11 @@ canvas needs neither.
   ` (V)` suffix. A capture, such as a camera, can still be shared by nesting it in each canvas's group.
 - **A source can be shared when every canvas fades it alike.** The layout fades a source through filters on the
   source itself, but places it through each canvas's own item. So a scene both canvases always show and hide together,
-  such as a content group, can serve both, each canvas laying out its own item of it. `firebot:deploy` checks that
-  every preset, under every combination of modifiers, fades each shared source the same way on every canvas that binds
-  it, and refuses a preset that leaves one of those canvases out while another changes the source, or a border or
-  sized name text bound on more than one canvas, since each canvas sizes those itself.
+  such as a content group, or a standby widget, can serve both, each canvas laying out its own item of it.
+  `firebot:deploy` checks that every preset, under every combination of modifiers, fades each shared source the same
+  way on every canvas that binds it, and refuses a preset that leaves one of those canvases out while another changes
+  the source, or a border or sized name text bound on more than one canvas, since each canvas sizes those itself.
+  Standby texts only ever move, so canvases may share them freely.
 - **A scene is the size of its canvas.** OBS sizes a scene to the canvas it belongs to, and obs-websocket cannot give
   one a size of its own. A vertical canvas's scene is 1080×1920, so a nested scene that has to keep a landscape
   shape, such as a camera group whose item scales to fit with a crop, belongs on the main canvas, where the vertical

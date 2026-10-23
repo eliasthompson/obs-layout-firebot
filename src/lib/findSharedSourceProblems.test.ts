@@ -91,6 +91,24 @@ describe('findSharedSourceProblems', () => {
     ]);
   });
 
+  it('checks standby widgets canvases share, and leaves shared standby texts alone, since those only move', () => {
+    const clips = { source: 'Clips', region: { x: 0, y: 0, width: 100, height: 100 } };
+    const config: ScenesConfig = {
+      canvases: {
+        landscape: { ...canvases.landscape, standby: { textScene: 'Texts', lineLength: 540 } },
+        portrait: { ...canvases.portrait, standby: { textScene: 'Texts (V)', lineLength: 720 } },
+      },
+      scenes: {
+        soon: { standby: { text: 'Soon', widgets: [clips] }, canvases: { portrait: { standby: { widgets: [] } } } },
+        brb: { standby: { text: 'Back', widgets: [clips] } },
+      },
+    };
+
+    expect(messages(config)).toEqual([
+      'scene "soon" would fade the shared "Clips" differently: landscape shows it after 300 ms over 300 ms, portrait hides it after 0 ms over 300 ms; every canvas that shares a source has to fade it alike',
+    ]);
+  });
+
   it('names the modifiers a problem shows under, once per preset and source', () => {
     // The shared camera is P's on landscape and Q's on portrait, and the modifier hides only P's
     const config: ScenesConfig = {
