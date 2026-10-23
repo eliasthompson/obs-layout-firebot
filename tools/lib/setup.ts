@@ -2,7 +2,7 @@
 // script drives, and gives region items a bounds type a rectangle can size. Borders render at native size (no
 // bounds) and get Move Value filters for their own width and height, plus, with a `borderColor` config, a Move Value
 // filter that fades their color filter's setting. Every toggled source but standby text gets an Opacity color filter
-// plus the Move Value filter that animates it, and the standby text scene is cropped at the canvas center. Move
+// plus the Move Value filter that animates it, and the standby text scene is cropped at the line's middle. Move
 // Source filters on the managed scenes that no longer match a bound item (renamed or removed sources) are deleted.
 // Idempotent: existing filters are updated only where they differ, never duplicated.
 import type { ObsClient } from '@/lib/connectObs';
@@ -256,16 +256,16 @@ export const runSetup = async (client: ObsClient, config: CanvasScenesConfig, { 
   }
 
   if (config.standby) {
-    // The text scene shows nothing left of the line's middle, so text slides out from behind the line. Cropping a
-    // scene item moves what is left of it to the item's position, so the item sits at the cut too.
-    const { textScene, lineHeight } = config.standby;
-    const { cut } = standbyLine(config, lineHeight);
+    // The text scene shows nothing on the hidden side of the line's middle, left of an upright line or below one
+    // across, so text slides out from behind the line
+    const { textScene, lineLength } = config.standby;
+    const line = standbyLine(config, lineLength);
     const item = itemsByScene.get(config.container)?.find((candidate) => candidate.sourceName === textScene);
     if (item) {
       const transform = (
         await client.call('GetSceneItemTransform', { sceneName: config.container, sceneItemId: item.sceneItemId })
       ).sceneItemTransform as Record<string, unknown>;
-      const wanted = { positionX: cut, positionY: 0, alignment: 5, cropLeft: cut };
+      const wanted = { ...line.textScene, alignment: 5 };
       const transformChanges = Object.entries(wanted).filter(([key, value]) => transform[key] !== value);
       if (transformChanges.length) {
         console.log(

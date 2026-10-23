@@ -51,10 +51,11 @@ The filters do the animating:
 - **`Opacity`** (Color Correction) plus **`Move: Opacity`** (Move Value) on every toggled source but standby text:
   fades. OBS's own scene item show/hide Fade brightens toward white on anything with transparency, so it is not used.
 
-Regions a layout does not use fade out while shrinking to a point at the canvas center and are hidden; when a later
-layout needs them, they fade in while growing from that point. The name is the exception: it has no border and always
-sits over another region, so without `hasName` it fades out where it would be, keeps moving with its host while hidden,
-and fades back in place. Participant layouts a scene does not use fade out and hide in the container scene.
+Regions a layout does not use fade out while shrinking to a point at the center of the layout area (the canvas less
+its margins) and are hidden; when a later layout needs them, they fade in while growing from that point. The name is
+the exception: it has no border and always sits over another region, so without `hasName` it fades out where it would
+be, keeps moving with its host while hidden, and fades back in place. Participant layouts a scene does not use fade
+out and hide in the container scene.
 
 ## Getting started
 
@@ -95,7 +96,7 @@ every machine makes the same presets and there is nothing else to keep. Keep the
   collection file, around a restart of OBS.
 - For standby screens, a **standby text** scene in the container, below the participant layouts, holding one text
   source per screen, and any standby widgets as items of the container. `obs:deploy` crops the text scene at the canvas
-  center.
+  center: left of it on a landscape canvas, below it on a portrait one.
 - For a second canvas, such as Aitum Vertical's: the same container, layout scenes, and items on that canvas, with
   sources of its own; see [Canvases](#canvases).
 
@@ -151,7 +152,7 @@ export default {
       },
       // The scene in the container that holds the standby texts, the height of the standby line, and how far past
       // the line a text shows
-      standby: { textScene: '[Widget] Standby Text', lineHeight: 540, textGap: 30 },
+      standby: { textScene: '[Widget] Standby Text', lineLength: 540, textGap: 30 },
     },
     // Optional: Aitum Vertical's canvas, by the name OBS lists it under; see Canvases. The scenes name participants by
     // the same keys, and its OBS scenes have names of their own, so the two canvases' scenes never look alike
@@ -170,7 +171,8 @@ export default {
       },
       // The same key, in the OBS scene `scene` names
       participants: { '[Layout] Person 1': { ...person(1, ' (V)'), scene: '[Layout] Person 1 (V)' } },
-      standby: { textScene: '[Widget] Standby Text', lineHeight: 540, textGap: 30 },
+      // A portrait canvas's line runs across it, and its text shows above the line
+      standby: { textScene: '[Widget] Standby Text (V)', lineLength: 720, textGap: 30 },
     },
   },
   // Pixels the border sources' shadow filters add outside the border on every side
@@ -206,7 +208,7 @@ export default {
       // The vertical canvas has no second person, so this scene leaves it as it is
       canvases: { portrait: false },
     },
-    // Standby screens: every participant collapses into a line at the canvas center and the text slides out from
+    // Standby screens: every participant collapses into a line at the layout area's center and the text slides out from
     // behind it; `line` names whose main border is the line, the first participant when left out
     '[Standby] Starting Soon': { standby: { text: '[Text] Starting Soon' } },
     '[Standby] Be Right Back': {
@@ -252,7 +254,7 @@ Each canvas takes:
 | `config`       | Optional. This canvas's `LayoutConfig` layer, over the config's and under each participant's.                                                                                                                               |
 | `regions`      | Optional. This canvas's region settings, over the config's and under each participant's.                                                                                                                                    |
 | `participants` | Every participant on the canvas, keyed by the name scenes use for it, with its layout scene in `scene` when that is not the key, the source (and border) for each region, and the participant's own `config` and `regions`. |
-| `standby`      | Needed for standby scenes on this canvas: `textScene`, `lineHeight`, `textGap`; see [Standby screens](#standby-screens).                                                                                                    |
+| `standby`      | Needed for standby scenes on this canvas: `textScene`, `lineLength`, `textGap`; see [Standby screens](#standby-screens).                                                                                                    |
 
 A scene entry may carry its own `options` and `duration`, a `standby` entry that makes it a standby screen, and
 `canvases`, what it changes on each canvas; see [Canvases](#canvases).
@@ -322,10 +324,12 @@ canvas needs neither.
 - **One preset, every canvas.** A preset applies its scene on every canvas that shows it, in one frame-synced batch,
   so the canvases move together. Scenes, modifiers, and the standby line name participants by their key in each
   canvas's `participants`, so the same keys on every canvas let one list of scenes serve them all.
-- **A scene can change per canvas.** A scene's `canvases` entry for a canvas replaces its `participants` there or adds
-  `options`, and `false` leaves that canvas as it is when the preset runs. A canvas without every participant a scene
-  shows, or without `standby` settings for a standby scene, leaves the scene out too; `firebot:deploy` warns about
-  those unless the scene says `false` for that canvas, and a scene no canvas shows is an error.
+- **A scene can change per canvas.** A scene's `canvases` entry for a canvas replaces its `participants` there, adds
+  `options`, or, for a standby scene, lays its own `standby` text, widgets, or line over the scene's, since each canvas
+  has its own text sources and widget regions; `false` leaves that canvas as it is when the preset runs. A canvas
+  without every participant a scene shows, or without `standby` settings for a standby scene, leaves the scene out
+  too; `firebot:deploy` warns about those unless the scene says `false` for that canvas, and a scene no canvas shows is
+  an error.
 - **Each canvas has its own scenes and sources.** OBS lets scene names repeat across canvases, so the vertical canvas
   can have its own `[Scene] Content` and `[Layout] Person 1`. To tell them apart, give them names of their own, such
   as `[Scene] Content (V)`: `container` names the canvas's container, and a participant entry's `scene` names its
@@ -377,13 +381,19 @@ the new target color, so a recolor written with it stays in step with this packa
 
 ### Standby screens
 
-A scene entry with `standby` does not lay its participants out. Instead, every region collapses into one vertical line
-at the canvas center, and a text slides out from behind it:
+A scene entry with `standby` does not lay its participants out. Instead, every region collapses into one line at the
+center of the layout area (the canvas less its margins), upright on a landscape canvas and across a portrait one, and
+a text slides out from behind it:
 
 ```ts
 export default {
   // ...
-  standby: { textScene: '[Widget] Standby Text', lineHeight: 540 },
+  canvases: {
+    landscape: {
+      // ...
+      standby: { textScene: '[Widget] Standby Text', lineLength: 540 },
+    },
+  },
   scenes: {
     // ...
     '[Standby] Starting Soon': {
@@ -404,19 +414,23 @@ The transition runs in stages, each one `duration` long:
 | Standby → standby | The old text slides back behind the line | The new text slides out            |
 | Standby → layout  | Text slides back, widgets fade out       | Regions grow out to the new layout |
 
-- **The line.** Content collapses to no width at the canvas center, which leaves each border's color source two
-  borders wide (`regionBorder` per side), `lineHeight` tall. With an inner stroke at least a border wide, the line is
-  solid stroke. Every participant collapses onto it unless the scene lists `participants`, and only the `line`
-  participant's main border stays shown (the first participant when left out; the main region is the one
-  obs-layout-generator puts in the main column: main content, else camera, else aux content, else info), so their
-  shadows do not stack. Leaving standby for a layout whose main region is another one, that border takes over the
-  line in a single frame before the regions grow out.
-- **The text** is an item of `textScene`, which `obs:deploy` crops at the canvas center, so text slides out from behind the
-  line without fading. It shows at its rendered size, which the script reads from OBS, centered on the line and
-  `textGap` pixels past it (default 30); until OBS has reported a size, a box the line's proportions suggest stands
-  in. Hidden text waits entirely left of the cut. Put `textScene` below the participant layouts in the container, so
-  the line covers the cut. Each screen has its own text source; a scene that replaces another's text slides the old
-  one back first.
+- **The line.** Content collapses to no width at the layout area's center, which leaves each border's color source two
+  borders wide (`regionBorder` per side), `lineLength` tall. A portrait canvas turns it on its side: content collapses
+  to no height, and the line runs across the canvas, `lineLength` wide and two borders tall. Portrait is
+  obs-layout-generator's `orientation` option, or a layout area taller than wide when it is `auto`, as the layout
+  decides. With an inner stroke at least a border wide, the line is solid stroke. Every participant collapses onto it
+  unless the scene lists `participants`, and only the `line` participant's main border stays shown (the first
+  participant when left out; the main region is the one obs-layout-generator puts in the main column: main content,
+  else camera, else aux content, else info), so their shadows do not stack. Leaving standby for a layout whose main
+  region is another one, that border takes over the line in a single frame before the regions grow out.
+- **The text** is an item of `textScene`, which `obs:deploy` crops at the line's middle, so text slides out from
+  behind the line without fading. It shows at its rendered size, which the script reads from OBS, centered on the line
+  and `textGap` pixels past it (default 30): right of an upright line, above one across. Until OBS has reported a size,
+  a box the line's proportions suggest stands in. Hidden text waits entirely past the cut, left of an upright line and
+  below one across. Put `textScene` below the participant layouts in the container, so the line covers the cut. Each
+  screen has its own text source; a scene that replaces another's text slides the old one back first. The text sources
+  only ever move, so canvases can share them, each nesting them in a text scene of its own, unless a canvas wants its
+  lines aligned otherwise, which is a setting of the source.
 - **Widgets** are items of the container that fade in and out at their region, for example browser sources that rotate
   their own content.
 - **What it starts from** is read from OBS on every run: which standby items show, and whether the borders were last
@@ -528,6 +542,8 @@ change the config instead.
   scene keys, and so the preset ids, are unchanged, so nothing in Firebot needs pointing at a preset again. A 3.x
   config is refused with a message saying so.
 - **More canvases.** A second canvas is optional; see [Canvases](#canvases) for what it needs in OBS.
+- **`standby.lineHeight` is now `lineLength`**, since a portrait canvas's line runs across it. A config with the old
+  name is refused with a message saying so.
 - **Library.** Functions that lay out or check one canvas take its view of the config, a `CanvasScenesConfig`, which
   `resolveCanvasConfig` gives. `findConfigProblems` checks one canvas against OBS, and `findSceneProblems` checks the
   scenes and modifiers. `runLayout` reports what it did on each canvas in `canvases`, and `buildMoveRequests` is built

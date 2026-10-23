@@ -37,7 +37,7 @@ describe('listBindings', () => {
     const withStandby: CanvasScenesConfig = {
       ...config,
       participants: {},
-      standby: { textScene: 'Standby Text', lineHeight: 540 },
+      standby: { textScene: 'Standby Text', lineLength: 540 },
       scenes: {
         soon: {
           participants: [],
@@ -77,7 +77,7 @@ describe('listBindings', () => {
       listScenes({
         container: 'Program',
         participants: { Program: { sources: {} }, P1: { sources: {} } },
-        standby: { textScene: 'Text', lineHeight: 540 },
+        standby: { textScene: 'Text', lineLength: 540 },
         scenes: {},
       }),
     ).toEqual(['Program', 'Text', 'P1']);

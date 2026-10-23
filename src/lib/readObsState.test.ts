@@ -8,7 +8,7 @@ import { readObsState } from '@/lib/readObsState';
 
 const config: CanvasScenesConfig = {
   container: 'C',
-  standby: { textScene: 'T', lineHeight: 540 },
+  standby: { textScene: 'T', lineLength: 540 },
   participants: {
     L1: { sources: { camera: { source: 'cam', border: 'camBorder' }, name: { source: 'name' } } },
     L2: {
@@ -35,11 +35,12 @@ describe('readObsState', () => {
     const client = fakeClient([]);
     const withoutStandby = { ...config, standby: undefined };
 
-    expect(await readObsState(client, withoutStandby)).toEqual({ sceneItems: {}, borderWidths: {}, fontSizes: {} });
+    expect(await readObsState(client, withoutStandby)).toEqual({ sceneItems: {}, borderThickness: {}, fontSizes: {} });
     expect(client.callBatch).not.toHaveBeenCalled();
   });
 
   it('reads every scene once and each border width in one realtime batch, with source sizes', async () => {
+    // A landscape canvas's line is upright, so a border's thickness across it is its width
     const item = { sourceName: 'cam', sceneItemId: 3, sceneItemEnabled: true, sceneItemIndex: 0, inputKind: 'dshow' };
     const transform = { positionX: 9, sourceWidth: 580, sourceHeight: 402, width: 580, height: 402 };
     const client = fakeClient([
@@ -59,7 +60,7 @@ describe('readObsState', () => {
         L1: [{ sourceName: 'cam', sceneItemId: 3, sceneItemEnabled: true }],
         L2: [],
       },
-      borderWidths: { camBorder: 12 },
+      borderThickness: { camBorder: 12 },
       fontSizes: {},
     });
     expect(client.callBatch).toHaveBeenCalledWith(
@@ -75,17 +76,35 @@ describe('readObsState', () => {
     );
   });
 
-  it('leaves out border widths OBS could not report', async () => {
+  it("reads each border's height instead on a portrait canvas, whose standby line runs across it", async () => {
+    const client = fakeClient([
+      ok('GetSceneItemList'),
+      ok('GetSceneItemList'),
+      ok('GetSceneItemList'),
+      ok('GetSceneItemList'),
+      ok('GetSourceFilter', { filterSettings: { setting_int: 12 } }),
+      ok('GetSourceFilter', { filterSettings: { setting_int: 402 } }),
+    ]);
+    const portrait = { ...config, options: { canvasWidth: 1080, canvasHeight: 1920 } };
+
+    expect((await readObsState(client, portrait)).borderThickness).toEqual({ camBorder: 12, infoBorder: 402 });
+    expect(vi.mocked(client.callBatch).mock.calls[0][0].slice(4)).toEqual([
+      { requestType: 'GetSourceFilter', requestData: { sourceName: 'camBorder', filterName: 'Move: Height' } },
+      { requestType: 'GetSourceFilter', requestData: { sourceName: 'infoBorder', filterName: 'Move: Height' } },
+    ]);
+  });
+
+  it('leaves out border thicknesses OBS could not report', async () => {
     const client = fakeClient([failed('GetSceneItemList'), failed('GetSourceFilter'), ok('GetSourceFilter')]);
     const borderOnly: CanvasScenesConfig = {
       ...config,
       container: 'L1',
-      standby: { textScene: 'L1', lineHeight: 540 },
+      standby: { textScene: 'L1', lineLength: 540 },
     };
 
     expect(await readObsState(client, { ...borderOnly, participants: { L1: config.participants.L2 } })).toEqual({
       sceneItems: {},
-      borderWidths: {},
+      borderThickness: {},
       fontSizes: {},
     });
   });
@@ -154,7 +173,7 @@ describe('readObsState', () => {
         L1: [{ sourceName: 'name', sceneItemId: 2, sceneItemEnabled: true, sourceSize: { width: 300, height: 60 } }],
         L2: [],
       },
-      borderWidths: {},
+      borderThickness: {},
       fontSizes: { name: 40 },
     });
     expect(client.callBatch).toHaveBeenCalledWith(

@@ -13,7 +13,7 @@ const config: ScenesConfig = {
         A: { sources: { camera: { source: 'Cam A' } } },
         B: { sources: { camera: { source: 'Cam B' } } },
       },
-      standby: { textScene: 'Texts', lineHeight: 540 },
+      standby: { textScene: 'Texts', lineLength: 540 },
     },
     portrait: {
       canvas: 'Aitum Vertical',
@@ -46,7 +46,7 @@ describe('resolveCanvas', () => {
       container: 'Canvas',
       options: { canvasWidth: 1920, canvasHeight: 1080 },
       participants: config.canvases.landscape.participants,
-      standby: { textScene: 'Texts', lineHeight: 540 },
+      standby: { textScene: 'Texts', lineLength: 540 },
       borderPadding: 9,
       config: { camera: { isGreenScreen: true } },
       regions: { name: { inset: 12, fontSizeMax: 48, fontSizeMin: undefined } },
@@ -109,7 +109,7 @@ describe('resolveCanvas', () => {
             A: { scene: 'A (V)', sources: { camera: { source: 'Cam A (V)' } } },
             B: { scene: 'B (V)', sources: { camera: { source: 'Cam B (V)' } } },
           },
-          standby: { textScene: 'Texts (V)', lineHeight: 540 },
+          standby: { textScene: 'Texts (V)', lineLength: 540 },
         },
       },
       modifiers: { Keyed: { config: {}, participants: ['B', 'Z'] }, Names: { config: { hasName: true } } },
@@ -130,6 +130,32 @@ describe('resolveCanvas', () => {
       participants: [{ layout: 'A' }, { layout: 'B' }],
     });
     expect(resolveCanvasConfig({ ...named, modifiers: undefined }, 'portrait')).not.toHaveProperty('modifiers');
+  });
+
+  it("lays a canvas's own standby text, widgets, or line over a standby scene's", () => {
+    const widgets = [{ source: 'Clips (V)', region: { x: 0, y: 1200, width: 1080, height: 600 } }];
+    const own: ScenesConfig = {
+      ...config,
+      canvases: {
+        ...config.canvases,
+        portrait: { ...config.canvases.portrait, standby: { textScene: 'Texts (V)', lineLength: 720 } },
+      },
+      scenes: {
+        Standby: {
+          standby: { text: 'Soon', line: 'A' },
+          canvases: { portrait: { standby: { text: 'Soon (V)', widgets } } },
+        },
+        Away: { standby: { text: 'Away', line: 'B' }, canvases: { portrait: { standby: { line: 'A' } } } },
+        Plain: { participants: [{ layout: 'A' }], canvases: { portrait: { standby: { text: 'Ignored' } } } },
+      },
+    };
+    const portrait = resolveCanvas(own, 'portrait');
+
+    expect(portrait.config.scenes.Standby).toEqual({ standby: { text: 'Soon (V)', line: 'A', widgets } });
+    // The canvas has no "B", but its own line puts "A" there
+    expect(portrait.config.scenes.Away).toEqual({ standby: { text: 'Away', line: 'A' } });
+    expect(portrait.config.scenes.Plain).toEqual({ participants: [{ layout: 'A' }] });
+    expect(resolveCanvasConfig(own, 'landscape').scenes.Standby).toEqual({ standby: { text: 'Soon', line: 'A' } });
   });
 
   it('fails on two participants of a canvas in the same OBS scene', () => {

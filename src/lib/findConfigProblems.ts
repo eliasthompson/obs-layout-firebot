@@ -85,7 +85,7 @@ export const findConfigProblems = (config: CanvasScenesConfig, inventory: ObsInv
         }
       }
     } else {
-      error('scenes use standby, but the config has no standby settings (textScene, lineHeight)');
+      error('scenes use standby, but the config has no standby settings (textScene, lineLength)');
     }
     for (const { binding } of listOverlays(config)) {
       if (hasScene(binding.scene) && !hasItem(binding.scene, binding.source)) {

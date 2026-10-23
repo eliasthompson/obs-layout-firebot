@@ -101,11 +101,13 @@ export const resolveCanvas = (config: ScenesConfig, canvasKey: string): Resolved
       continue;
     }
     const shown = change?.participants ?? scene.participants;
+    // A canvas's own standby text, widgets, or line only change a standby scene
+    const sceneStandby = scene.standby && change?.standby ? { ...scene.standby, ...change.standby } : scene.standby;
     const missing = [
       ...new Set(
         [
           ...(shown ?? []).map(({ layout }) => layout),
-          ...(scene.standby?.line === undefined ? [] : [scene.standby.line]),
+          ...(sceneStandby?.line === undefined ? [] : [sceneStandby.line]),
         ].filter((layout) => !Object.hasOwn(participants, layout)),
       ),
     ];
@@ -114,7 +116,7 @@ export const resolveCanvas = (config: ScenesConfig, canvasKey: string): Resolved
         `it shows ${missing.map((layout) => `"${layout}"`).join(', ')}, which the canvas does not have`;
       continue;
     }
-    if (scene.standby && !standby) {
+    if (sceneStandby && !standby) {
       leftOut[sceneKey] = 'it is a standby scene, and the canvas has no standby settings';
       continue;
     }
@@ -124,9 +126,12 @@ export const resolveCanvas = (config: ScenesConfig, canvasKey: string): Resolved
         ? { participants: shown.map((participant) => ({ ...participant, layout: sceneOf(participant.layout) })) }
         : {}),
       ...(change?.options ? { options: { ...scene.options, ...change.options } } : {}),
-      ...(scene.standby?.line === undefined
-        ? {}
-        : { standby: { ...scene.standby, line: sceneOf(scene.standby.line) } }),
+      ...(sceneStandby
+        ? {
+            standby:
+              sceneStandby.line === undefined ? sceneStandby : { ...sceneStandby, line: sceneOf(sceneStandby.line) },
+          }
+        : {}),
     };
   }
   const canvasModifiers =

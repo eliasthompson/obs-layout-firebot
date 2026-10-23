@@ -124,7 +124,7 @@ describe('findConfigProblems', () => {
       ...config,
       options: { regionBorder: 6 },
       borderPadding: 9,
-      standby: { textScene: 'Text', lineHeight: 540 },
+      standby: { textScene: 'Text', lineLength: 540 },
       scenes: {
         ...config.scenes,
         soon: {
@@ -153,7 +153,7 @@ describe('findConfigProblems', () => {
 
     it('needs the standby settings and a border for the line', () => {
       expect(messages(findConfigProblems({ ...standby, standby: undefined }, standbyInventory))).toEqual([
-        'scenes use standby, but the config has no standby settings (textScene, lineHeight)',
+        'scenes use standby, but the config has no standby settings (textScene, lineLength)',
       ]);
       expect(messages(findConfigProblems({ ...standby, options: {} }, standbyInventory))).toEqual([
         'the standby line is two borders wide, so options.regionBorder (0) must be above 0',
@@ -207,7 +207,7 @@ describe('findSceneProblems', () => {
     landscape: {
       container: 'Program',
       participants: { P1: { sources: {} }, P2: { sources: {} } },
-      standby: { textScene: 'Text', lineHeight: 540 },
+      standby: { textScene: 'Text', lineLength: 540 },
     },
     portrait: { canvas: 'Aitum Vertical', container: 'Program', participants: { P1: { sources: {} } } },
   };

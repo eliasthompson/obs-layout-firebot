@@ -46,6 +46,23 @@ describe('assertConfig', () => {
     }
   });
 
+  it("points a version 3 standby's lineHeight at lineLength", () => {
+    const standby = (settings: Record<string, unknown>) => ({
+      ...valid,
+      canvases: { landscape: { ...canvas, standby: { textScene: 'T', ...settings } } },
+    });
+
+    expect(() => {
+      assertConfig(standby({ lineHeight: 540 }));
+    }).toThrow('config.canvases.landscape.standby.lineHeight is now lineLength');
+    expect(() => {
+      assertConfig(standby({ lineLength: 540 }));
+    }).not.toThrow();
+    expect(() => {
+      assertConfig(standby({ lineHeight: 540, lineLength: 540 }));
+    }).not.toThrow();
+  });
+
   it('rejects scenes that are not an object', () => {
     expect(() => {
       assertConfig({ ...valid, scenes: 'nope' });

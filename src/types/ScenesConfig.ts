@@ -111,6 +111,11 @@ export interface SceneCanvasBinding {
   participants?: SceneParticipant[];
   /** Options over the scene's, on this canvas. */
   options?: LayoutOptions;
+  /**
+   * A standby scene's text, widgets, or line on this canvas, over the scene's: each canvas has its own text sources
+   * and canvas pixels.
+   */
+  standby?: StandbyBinding;
 }
 
 export interface SceneBinding {
@@ -137,9 +142,16 @@ export interface SceneBinding {
 export interface StandbySettings {
   /** Scene in the container, below the participant layouts, that holds every standby text and hides what is left of the line. */
   textScene: string;
-  /** Height of the line in pixels. Its width is the border on both sides: 2 × regionBorder. */
-  lineHeight: number;
-  /** Pixels between the line and a standby text, which shows at its rendered size, centered on the line. Default 30. */
+  /**
+   * Length of the line in pixels: up the middle of a landscape canvas, across the middle of a portrait one (as
+   * `options.orientation` decides, or the canvas's shape when it is `auto`). Its thickness is the border on both
+   * sides: 2 × regionBorder.
+   */
+  lineLength: number;
+  /**
+   * Pixels between the line and a standby text, which shows at its rendered size, centered on the line: right of an
+   * upright line, above one across. Default 30.
+   */
   textGap?: number;
 }
 

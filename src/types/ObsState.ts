@@ -13,8 +13,11 @@ export interface ObsSceneItem {
 export interface ObsState {
   /** Items of every scene read, by scene name. A scene that could not be read is missing. */
   sceneItems: Record<string, ObsSceneItem[]>;
-  /** The width each border's `Move: Width` filter last moved it to, by border source name. */
-  borderWidths: Record<string, number>;
+  /**
+   * How thick across the standby line each border was last sized, by border source name: the width its `Move: Width`
+   * filter last moved it to for an upright line, the height its `Move: Height` filter did for one across.
+   */
+  borderThickness: Record<string, number>;
   /** The current font size of every text source whose font is sized to its region, by source name. */
   fontSizes: Record<string, number>;
 }

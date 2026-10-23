@@ -24,6 +24,10 @@ export const assertConfig: (config: unknown) => asserts config is ScenesConfig =
       throw new Error(`config.canvases.${key}.container must name the container scene`);
     }
     if (!isObject(canvas.participants)) throw new Error(`config.canvases.${key}.participants must be an object`);
+    // Version 4 renamed it, since a portrait canvas's line runs across it
+    if (isObject(canvas.standby) && 'lineHeight' in canvas.standby && !('lineLength' in canvas.standby)) {
+      throw new Error(`config.canvases.${key}.standby.lineHeight is now lineLength`);
+    }
   }
   if (!isObject(config.scenes)) throw new Error('config.scenes must be an object');
 };

@@ -17,6 +17,7 @@ import type {
 import { DEFAULT_DURATION, DEFAULT_STANDBY_TEXT_GAP } from '@/constants/filterNames';
 import { adjustInsetRatios, type RegionInsets } from '@/lib/adjustInsetRatios';
 import { growRegion, shrinkRegion } from '@/lib/growRegion';
+import { layoutArea } from '@/lib/layoutArea';
 import { listOverlays } from '@/lib/listOverlays';
 import { moveFilterName } from '@/lib/moveFilterName';
 import { resolveModifiers } from '@/lib/resolveModifiers';
@@ -110,16 +111,16 @@ const layoutMetrics = (
  * Plan the transition to a scene key: one move step per bound item of the participants it shows, one visibility step
  * per participant layout in the pool, and one step per standby text and widget. Each shown participant's config is
  * built up from the config's base, their pool entry, the scene, and the modifiers in effect. Regions a layout does
- * not use are sent to a 1x1 point at the canvas center and hidden, so a later layout grows them out of that point. The
- * name is the exception: it has no border and always sits over a host region, so without one it stays hidden where
- * it would be, and only fades.
+ * not use are sent to a 1x1 point at the middle of the layout area and hidden, so a later layout grows them out of that
+ * point. The name is the exception: it has no border and always sits over a host region, so without one it stays
+ * hidden where it would be, and only fades.
  *
- * A standby scene collapses every participant's regions into the standby line instead: content to no width at the
- * canvas center, every border onto the line, and only the line participant's main border left showing as the line
- * (the one showing now, so the line never blinks). Its text slides out, at its rendered size and centered on the
- * line, and its widgets fade in once the collapse is done. Leaving standby runs the other way: overlays leave first,
- * then the regions grow out, and the new layout's main border takes over the line in the same frame if another
- * border held it.
+ * A standby scene collapses every participant's regions into the standby line instead: content to no width (no height
+ * on a portrait canvas, whose line runs across it) at the middle of the layout area, every border onto the line, and
+ * only the line participant's main border left showing as the line (the one showing now, so the line never blinks).
+ * Its text slides out, at its rendered size and centered on the line, right of an upright line and above one across,
+ * and its widgets fade in once the collapse is done. Leaving standby runs the other way: overlays leave first, then the
+ * regions grow out, and the new layout's main border takes over the line in the same frame if another border held it.
  *
  * @param state - What OBS shows now, from `readObsState`. Without it, the plan assumes nothing is shown.
  * @param modifiers - Names of the modifiers switched on.
@@ -127,7 +128,7 @@ const layoutMetrics = (
 export const planLayoutMoves = (
   config: CanvasScenesConfig,
   sceneKey: string,
-  state: ObsState = { sceneItems: {}, borderWidths: {}, fontSizes: {} },
+  state: ObsState = { sceneItems: {}, borderThickness: {}, fontSizes: {} },
   modifiers: readonly string[] = [],
 ): MoveStep[] => {
   // Record lookups are typed as always present; the key comes from user input
@@ -156,12 +157,14 @@ export const planLayoutMoves = (
     throw new Error(`Scene "${sceneKey}" puts unknown participant "${lineLayout}" on the standby line`);
   }
 
-  const line = config.standby ? standbyLine(config, config.standby.lineHeight) : undefined;
+  const line = config.standby ? standbyLine(config, config.standby.lineLength) : undefined;
   const textGap = config.standby?.textGap ?? DEFAULT_STANDBY_TEXT_GAP;
   const regionBorder = resolveOption('regionBorder', config, scene.options);
+  // Regions the layout leaves out wait at the middle of the layout area, where the standby line is too
+  const area = layoutArea({ ...config.options, ...scene.options });
   const neutral: Rect = {
-    x: Math.round(resolveOption('canvasWidth', config, scene.options) / 2),
-    y: Math.round(resolveOption('canvasHeight', config, scene.options) / 2),
+    x: Math.round(area.x + area.width / 2),
+    y: Math.round(area.y + area.height / 2),
     width: 1,
     height: 1,
   };
@@ -189,14 +192,16 @@ export const planLayoutMoves = (
   const isShown = (sceneName: string, source: string) => sceneItem(sceneName, source)?.sceneItemEnabled === true;
 
   /**
-   * Where standby text shows: at its rendered size, centered on the line, a gap past it. Until OBS reports the size,
-   * a box the line's proportions suggest.
+   * Where standby text shows: at its rendered size, centered on the line, a gap past it: right of an upright line,
+   * above one across. Until OBS reports the size, a box the line's proportions suggest.
    */
   const textRegion = (source: string, to: StandbyLine, textScene: string): Rect => {
     const size = sceneItem(textScene, source)?.sourceSize;
-    const { width, height } =
-      size && size.height > 0 ? size : { width: to.size.height, height: Math.round(to.size.height / 2) };
-    return { x: to.cut + textGap, y: Math.round(to.content.y + to.content.height / 2 - height / 2), width, height };
+    const length = Math.max(to.size.width, to.size.height);
+    const { width, height } = size && size.height > 0 ? size : { width: length, height: Math.round(length / 2) };
+    return to.isHorizontal
+      ? { x: Math.round(to.content.x + to.content.width / 2 - width / 2), y: to.cut - textGap - height, width, height }
+      : { x: to.cut + textGap, y: Math.round(to.content.y + to.content.height / 2 - height / 2), width, height };
   };
 
   // Overlays showing now that the scene does not show leave first, and everything else waits for them
@@ -300,7 +305,9 @@ export const planLayoutMoves = (
     const collapsed =
       line !== undefined &&
       Object.values(entry.sources).some(
-        ({ border }) => border !== undefined && state.borderWidths[border] === line.size.width,
+        ({ border }) =>
+          border !== undefined &&
+          state.borderThickness[border] === (line.isHorizontal ? line.size.height : line.size.width),
       );
     const heirs = MAIN_REGIONS.flatMap((region) => (metric[region] ? (entry.sources[region]?.border ?? []) : []));
     const heirItem = heirs.length ? sceneItem(layout, heirs[0]) : undefined;
@@ -341,10 +348,16 @@ export const planLayoutMoves = (
 
   const overlaySteps = overlays.map(({ binding: { scene: overlayScene, source, kind }, region }) => {
     const target = wanted.get(source);
-    // Hidden text waits left of the cut, where the text scene's crop hides all of it; a widget fades where it is
+    // Hidden text waits past the cut, where the text scene's crop hides all of it: left of an upright line, below one
+    // across. A widget fades where it is
     const shownAt =
       kind === 'text' && line && config.standby ? textRegion(source, line, config.standby.textScene) : region;
-    const hidden = kind === 'text' && line && shownAt ? { ...shownAt, x: line.cut - shownAt.width } : shownAt;
+    const hidden =
+      kind === 'text' && line && shownAt
+        ? line.isHorizontal
+          ? { ...shownAt, y: line.cut }
+          : { ...shownAt, x: line.cut - shownAt.width }
+        : shownAt;
     // An overlay coming in waits for the regions to collapse, or for the overlay it replaces to leave
     const entering = target !== undefined && !isShown(overlayScene, source);
     return step(

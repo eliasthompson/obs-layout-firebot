@@ -9,7 +9,7 @@ const clips = { x: 100, y: 300, width: 600, height: 480 };
 
 const config: CanvasScenesConfig = {
   container: '[Scene] Canvas',
-  standby: { textScene: '[Widget] Standby Text', lineHeight: 540 },
+  standby: { textScene: '[Widget] Standby Text', lineLength: 540 },
   participants: {},
   scenes: {
     layout: { participants: [] },

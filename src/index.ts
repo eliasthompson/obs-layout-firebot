@@ -17,6 +17,7 @@ export * from '@/lib/filterWrites';
 export * from '@/lib/findConfigProblems';
 export * from '@/lib/firebotScript';
 export * from '@/lib/growRegion';
+export * from '@/lib/layoutArea';
 export * from '@/lib/listBindings';
 export * from '@/lib/listOverlays';
 export * from '@/lib/mergeLayoutPresets';

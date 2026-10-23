@@ -195,7 +195,7 @@ describe('planLayoutMoves', () => {
             },
           ],
         },
-        borderWidths: {},
+        borderThickness: {},
         fontSizes: fontSize === undefined ? {} : { name: fontSize },
       }) satisfies ObsState as ObsState;
     const fontSize = (sourceHeight: number, size?: number) =>
@@ -320,6 +320,20 @@ describe('planLayoutMoves', () => {
 
     expect(content).toMatchObject({ region: { x: 960, y: 540, width: 1, height: 1 }, visible: false, duration: 500 });
     expect(border).toMatchObject({ region: { x: 960, y: 540, width: 1, height: 1 }, size: { width: 1, height: 1 } });
+  });
+
+  it("centers that point on the layout area, so uneven margins move it, the scene's own options included", () => {
+    const portrait = {
+      ...config,
+      options: { ...options, canvasWidth: 1080, canvasHeight: 1920, canvasMarginTop: 144, canvasMarginBottom: 422 },
+    };
+    const unused = (scenes: typeof config.scenes) =>
+      planLayoutMoves({ ...portrait, scenes }, 'Camera 1P').find((step) => step.source === '[Group] Content 1')?.region;
+
+    expect(unused(config.scenes)).toEqual({ x: 540, y: 821, width: 1, height: 1 });
+    expect(
+      unused({ 'Camera 1P': { ...config.scenes['Camera 1P'], options: { canvasMarginLeft: 100 } } }),
+    ).toMatchObject({ x: 590 });
   });
 
   it('hides a name the layout leaves out where it would be, and moves nothing else for it', () => {
@@ -457,7 +471,7 @@ describe('planLayoutMoves standby', () => {
     options,
     borderPadding: 9,
     duration: 300,
-    standby: { textScene: '[Widget] Standby Text', lineHeight: 540 },
+    standby: { textScene: '[Widget] Standby Text', lineLength: 540 },
     participants: {
       '[Layout] Person 1': {
         sources: {
@@ -494,7 +508,7 @@ describe('planLayoutMoves standby', () => {
   const lineSize = { width: 12, height: 540 };
 
   /** OBS state with the items of each scene shown or not; items get ids in listed order from 1. */
-  const stateOf = (scenes: Record<string, Record<string, boolean>>, borderWidths: Record<string, number> = {}) => ({
+  const stateOf = (scenes: Record<string, Record<string, boolean>>, borderThickness: Record<string, number> = {}) => ({
     sceneItems: Object.fromEntries(
       Object.entries(scenes).map(([scene, items]) => [
         scene,
@@ -505,7 +519,7 @@ describe('planLayoutMoves standby', () => {
         })),
       ]),
     ),
-    borderWidths,
+    borderThickness,
     fontSizes: {},
   });
   const collapsed = { mainBorder: 12, camBorder: 12, infoBorder: 12 };
@@ -562,12 +576,69 @@ describe('planLayoutMoves standby', () => {
     // An empty text reports no height, so the stand-in box decides
     expect(region('soon', 0, 0)).toEqual({ ...unsizedText, x: 960 - 540 });
     // The gap is configurable
-    const wider = { ...standby, standby: { textScene: '[Widget] Standby Text', lineHeight: 540, textGap: 50 } };
+    const wider = { ...standby, standby: { textScene: '[Widget] Standby Text', lineLength: 540, textGap: 50 } };
     expect(bySource(planLayoutMoves(wider, 'brb', sized(100, 50))).brbText.region).toEqual({
       x: 1010,
       y: 515,
       width: 100,
       height: 50,
+    });
+  });
+
+  describe('on a portrait canvas, whose line runs across it', () => {
+    const portrait: CanvasScenesConfig = {
+      ...standby,
+      options: { ...options, canvasWidth: 1080, canvasHeight: 1920 },
+      standby: { textScene: '[Widget] Standby Text', lineLength: 720 },
+    };
+    // The line: no content height at the middle, a 738x30 border item, and a 720x12 color source
+    const across = { x: 186, y: 960, width: 708, height: 0 };
+    const acrossLine = { x: 171, y: 945, width: 738, height: 30 };
+    const acrossSize = { width: 720, height: 12 };
+    // Unsized text stands in a 720x360 box, centered on the line, 30 above it
+    const unsizedAbove = { x: 180, y: 570, width: 720, height: 360 };
+
+    it('collapses the regions to no height across the middle, and slides text up out of it', () => {
+      const steps = bySource(planLayoutMoves(portrait, 'soon'));
+
+      expect(steps.main).toMatchObject({ region: across, visible: false });
+      expect(steps.mainBorder).toMatchObject({ region: acrossLine, size: acrossSize, visible: true });
+      expect(steps.soonText).toMatchObject({ region: unsizedAbove, visible: true, delay: 300 });
+      // Unused text waits below the cut, where the text scene's crop hides it
+      expect(steps.brbText).toMatchObject({ region: { ...unsizedAbove, y: 960 }, visible: false });
+    });
+
+    it('centers text at its rendered size above the line, the gap between them', () => {
+      const sized = {
+        ...stateOf({}),
+        sceneItems: {
+          '[Widget] Standby Text': [
+            { sourceName: 'brbText', sceneItemId: 1, sceneItemEnabled: false, sourceSize: { width: 600, height: 200 } },
+          ],
+        },
+      };
+
+      expect(bySource(planLayoutMoves(portrait, 'brb', sized)).brbText.region).toEqual({
+        x: 240,
+        y: 730,
+        width: 600,
+        height: 200,
+      });
+    });
+
+    it('knows a border on the line by its height, and hands the line over leaving standby', () => {
+      const fromSoon = stateOf({ '[Layout] Person 1': { mainBorder: true, cam: false, camBorder: false } }, collapsed);
+      // A border as wide as the line is not on it; only the line's thickness across says so
+      const wideButOpen = stateOf(
+        { '[Layout] Person 1': { mainBorder: true, cam: false, camBorder: false } },
+        { mainBorder: 720, camBorder: 720 },
+      );
+
+      expect(bySource(planLayoutMoves(portrait, 'camera', fromSoon)).camBorder.handoff).toEqual({
+        sceneItemId: 3,
+        visible: true,
+      });
+      expect(planLayoutMoves(portrait, 'camera', wideButOpen).some((step) => step.handoff)).toBe(false);
     });
   });
 

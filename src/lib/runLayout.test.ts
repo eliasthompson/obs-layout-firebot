@@ -100,7 +100,7 @@ describe('runLayout', () => {
         main: {
           container: 'C',
           participants: { L: { sources: { camera: { source: 'cam', border: 'camBorder' } } } },
-          standby: { textScene: 'T', lineHeight: 540 },
+          standby: { textScene: 'T', lineLength: 540 },
         },
       },
     };
@@ -124,7 +124,7 @@ describe('runLayout', () => {
     expect(summary.steps).toEqual(
       planLayoutMoves(resolveCanvasConfig(standby, 'main'), 'only', {
         sceneItems: { C: [{ sourceName: 'L', sceneItemId: 1, sceneItemEnabled: false }] },
-        borderWidths: {},
+        borderThickness: {},
         fontSizes: {},
       }),
     );
