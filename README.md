@@ -478,8 +478,10 @@ the config takes `--config <path>` (default `config/scenes.ts`); every command t
 | `obs:restart`     | Restarts OBS, never forcibly, after checking that it is not streaming or recording.                                                                                                                                                             |
 | `obs:verify`      | `obs:verify "<scene key>"`: applies a scene from this machine and compares every item on every canvas with the plan; exits 1 on a mismatch. `--modifiers Keyed,Timer` applies it as the script would with those switched on.                    |
 | `obs:capture`     | `obs:capture "<scene key>" --save frames/`: screenshots of a canvas's container during a transition, or white-pixel counts without it. `--canvas portrait` picks the canvas, the first that shows the scene by default. `--modifiers` as above. |
+| `obs:prune`       | **Deletes for good** the old backups `obs:deploy` made of the scene collections, keeping the newest of each; see [Pruning backups](#pruning-backups). `--keep 3`, `--collection`.                                                               |
 | `firebot:deploy`  | Checks, stores, installs the script, and asks to restart for new presets or a new script; see below. `--skip-obs`.                                                                                                                              |
 | `firebot:restart` | Restarts Firebot, never forcibly, around installing the presets and turning on the two settings above.                                                                                                                                          |
+| `firebot:prune`   | **Deletes for good** the old backups the tools made of the profile's script, presets, and settings, keeping the newest of each; see [Pruning backups](#pruning-backups). `--keep 3`, `--profile-dir`.                                           |
 
 Version 2 renamed and regrouped the commands; see [Upgrading from 1.x](#upgrading-from-1x).
 
@@ -494,7 +496,25 @@ When the program cannot be closed from here, most often because it runs as admin
 or when it has not closed in time, the tool asks you to close it and waits until it is gone. It then does its file
 work and leaves starting the program to you as well, since a program started from a plain terminal would come back
 without the rights it had. A program that was not running is started afterwards. Every profile or collection file
-that is replaced is backed up next to it, with a timestamp.
+that is replaced is backed up next to it, with a timestamp; see [Pruning backups](#pruning-backups) for clearing old
+ones.
+
+### Pruning backups
+
+Every deploy that replaces a file backs it up next to it first, as `<file>.<time>.bak`, and nothing removes those
+copies on its own. `obs:prune` and `firebot:prune` delete the old ones, keeping the newest of each file (3 by default,
+`--keep` to change it):
+
+| Command         | Prunes the backups of                                                                                            |
+| --------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `obs:prune`     | Every scene collection file in OBS's folder, or only the one `--collection` (or `OBS_SCENE_COLLECTION`) names    |
+| `firebot:prune` | The profile's `scripts/obs-layout.js`, `effects/preset-effect-lists.json`, and `settings.json` (`--profile-dir`) |
+
+**This is destructive.** The files are deleted, not moved to the recycle bin, so once a backup is gone, the version
+of the file it held is gone too; `--keep 0` deletes every backup. Each command lists what it would delete and asks
+before deleting anything, unless `--yes`; run it with `--dry-run` first to see the list alone. It only ever touches
+backups the tools made, matched by their exact name: the files themselves, OBS's own `<collection>.json.bak`, backups
+other programs or older tools made, and every other file stay as they are. Nothing needs to be closed first.
 
 ### Deploying a change in OBS
 

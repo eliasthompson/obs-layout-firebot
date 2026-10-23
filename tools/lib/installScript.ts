@@ -3,11 +3,11 @@
 import { version as bundledGeneratorVersion } from '@eliasthompson/obs-layout-generator/package.json';
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { SCRIPT_FILE_NAME } from '@/lib/createPresetEffectList';
 
-import { backupPath, packageRoot, readJson } from './environment';
+import { backupPath, firebotProfileFiles, packageRoot, readJson } from './environment';
 
 export type InstallScriptResult = 'installed' | 'unchanged';
 
@@ -33,8 +33,7 @@ export const installScriptFile = (profileDir: string, dryRun = false): InstallSc
   const source = join(packageRoot(), 'dist', SCRIPT_FILE_NAME);
   if (!existsSync(source)) throw new Error(`${source} is missing; build the package first`);
 
-  const scriptsDir = join(profileDir, 'scripts');
-  const target = join(scriptsDir, SCRIPT_FILE_NAME);
+  const target = firebotProfileFiles(profileDir).script;
   if (existsSync(target) && readFileSync(target).equals(readFileSync(source))) {
     console.log(`script is up to date at ${target}`);
     return 'unchanged';
@@ -43,7 +42,7 @@ export const installScriptFile = (profileDir: string, dryRun = false): InstallSc
     console.log(`dry run: would install ${target}`);
     return 'installed';
   }
-  mkdirSync(scriptsDir, { recursive: true });
+  mkdirSync(dirname(target), { recursive: true });
   if (existsSync(target)) copyFileSync(target, backupPath(target));
   copyFileSync(source, target);
   console.log(`installed ${target}`);

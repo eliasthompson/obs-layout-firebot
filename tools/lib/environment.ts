@@ -14,6 +14,8 @@ import type { ObsConnection, ScenesConfig } from '@/types/ScenesConfig';
 
 import { DEFAULT_CONFIG_VARIABLE } from '@/constants/filterNames';
 import { assertConfig } from '@/lib/assertConfig';
+import { backupName } from '@/lib/backups';
+import { SCRIPT_FILE_NAME } from '@/lib/createPresetEffectList';
 import { readFirebotIntegrations } from '@/lib/readFirebotIntegrations';
 import { resolveObsConnection } from '@/lib/resolveObsConnection';
 
@@ -86,7 +88,7 @@ export const configVariable = (config: ScenesConfig, flag?: string) =>
  * other punctuation dropped, a number added when taken), so it is found by the name it holds, else by that rule.
  */
 const sceneCollectionFile = (name: string) => {
-  const dir = join(appDataDir(), 'obs-studio', 'basic', 'scenes');
+  const dir = obsScenesDir();
   const files = existsSync(dir) ? readdirSync(dir).filter((file) => extname(file) === '.json') : [];
   const named = files.find((file) => {
     try {
@@ -97,6 +99,9 @@ const sceneCollectionFile = (name: string) => {
   });
   return join(dir, named ?? `${name.replace(/\s/gu, '_').replace(/[^\p{L}\p{N}_]/gu, '')}.json`);
 };
+
+/** The folder OBS keeps its scene collection files in. */
+export const obsScenesDir = () => join(appDataDir(), 'obs-studio', 'basic', 'scenes');
 
 /**
  * OBS scene collection file: `--collection`, `OBS_SCENE_COLLECTION`, or the file of the collection OBS reported as
@@ -134,7 +139,14 @@ export const writeJson = (path: string, value: unknown, indent = 2) => {
 };
 
 /** Where to copy a file before replacing it: next to it, named with the time. */
-export const backupPath = (path: string) => `${path}.${new Date().toISOString().replace(/[:.]/g, '-')}.bak`;
+export const backupPath = (path: string) => backupName(path, new Date());
+
+/** The Firebot profile files the tools write, each backed up before it is replaced. */
+export const firebotProfileFiles = (profileDir: string) => ({
+  script: join(profileDir, 'scripts', SCRIPT_FILE_NAME),
+  presets: join(profileDir, 'effects', 'preset-effect-lists.json'),
+  settings: join(profileDir, 'settings.json'),
+});
 
 export const sleep = (ms: number) =>
   new Promise<void>((resolve) => {
