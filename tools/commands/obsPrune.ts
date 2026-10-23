@@ -4,7 +4,7 @@
 // OBS's own `<collection>.json.bak`, the collections themselves, and every other file stay. It prunes every collection
 // in OBS's folder, or only the file --collection (or OBS_SCENE_COLLECTION) names. --dry-run lists what it would delete.
 //
-//   obs-layout-firebot obs:prune [--keep 3] [--collection <file>] [--yes] [--dry-run]
+//   obs-layout-firebot obs:prune [--keep 3] [--collection <file>] [--config config/scenes.ts] [--yes] [--dry-run]
 import { existsSync, readdirSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -17,6 +17,8 @@ export const obsPrune = async (args: string[]) => {
     args,
     options: {
       collection: { type: 'string' },
+      // Taken like every command takes it, so project scripts can pass it; the backups do not depend on the config
+      config: { type: 'string' },
       'dry-run': { type: 'boolean', default: false },
       keep: { type: 'string' },
       yes: { type: 'boolean', default: false },
