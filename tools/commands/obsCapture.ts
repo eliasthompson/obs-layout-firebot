@@ -8,8 +8,11 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
+import type { ObsClient } from '@/lib/connectObs';
+
 import { connectObs } from '@/lib/connectObs';
 import { planLayoutMoves } from '@/lib/planLayoutMoves';
+import { readObsCanvases } from '@/lib/readObsCanvases';
 import { resolveCanvasConfig } from '@/lib/resolveCanvasConfig';
 import { runLayout } from '@/lib/runLayout';
 
@@ -36,6 +39,18 @@ const analyzeBmp = (buffer: Buffer) => {
 };
 
 const imageBytes = (imageData: string) => Buffer.from(imageData.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+
+/** A canvas's base size: from the canvas list, else OBS's video settings, which are the main canvas's. */
+const canvasSize = async (client: ObsClient, uuid: string | undefined) => {
+  const listed =
+    uuid === undefined ? undefined : (await readObsCanvases(client))?.find((canvas) => canvas.uuid === uuid);
+  if (listed?.width && listed.height) return listed;
+  const { baseWidth, baseHeight } = (await client.call('GetVideoSettings')) as {
+    baseWidth: number;
+    baseHeight: number;
+  };
+  return { width: baseWidth, height: baseHeight };
+};
 
 export const obsCapture = async (args: string[]) => {
   const { positionals, values } = parseArgs({
@@ -80,6 +95,9 @@ export const obsCapture = async (args: string[]) => {
     throw new Error(`OBS does not have the "${canvasKey}" canvas`);
   }
   const { client } = canvas;
+  const { width, height } = await canvasSize(connected, canvas.uuid);
+  // OBS keeps the source's shape when given one side, so frames fit their long side to `size` on any canvas
+  const fit = (size: number) => (width >= height ? { imageWidth: size } : { imageHeight: size });
 
   let saved = 0;
   const snapshot = async () => {
@@ -97,8 +115,7 @@ export const obsCapture = async (args: string[]) => {
       const { imageData } = (await client.call('GetSourceScreenshot', {
         sourceName: shotSource,
         imageFormat: 'png',
-        imageWidth: 640,
-        imageHeight: 360,
+        ...fit(640),
       })) as { imageData: string };
       writeFileSync(join(values.save, `frame-${String(saved++).padStart(2, '0')}.png`), imageBytes(imageData));
       return undefined;
@@ -106,8 +123,7 @@ export const obsCapture = async (args: string[]) => {
     const { imageData } = (await client.call('GetSourceScreenshot', {
       sourceName: shotSource,
       imageFormat: 'bmp',
-      imageWidth: 480,
-      imageHeight: 270,
+      ...fit(480),
     })) as { imageData: string };
     return analyzeBmp(imageBytes(imageData));
   };
