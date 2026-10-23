@@ -43,6 +43,12 @@ export interface SourceBinding {
 }
 
 export interface ParticipantPoolEntry {
+  /**
+   * The OBS scene that holds this participant's items on this canvas, nested in the container; the participant's key
+   * when left out. Lets every canvas keep the same keys, so one list of scenes serves them all, while each canvas
+   * names its own layout scenes, such as `[Layout] Person 1 (V)`.
+   */
+  scene?: string;
   sources: Partial<Record<LayoutRegionName, SourceBinding>>;
   /** This participant's own region settings, over the config's `regions` and under a scene's. */
   regions?: RegionSettingsMap;
@@ -54,7 +60,7 @@ export interface ParticipantPoolEntry {
 }
 
 export interface SceneParticipant {
-  /** Key in each canvas's `participants`: the OBS scene that holds this participant's items, nested in the container. */
+  /** Key in each canvas's `participants`, whose entry names the OBS scene that holds this participant's items. */
   layout: string;
   /**
    * What this composition changes for the participant, merged over their pool config: a region config or `null`
@@ -192,9 +198,10 @@ export interface CanvasConfig {
   /** This canvas's region settings, over the config's `regions` and under each participant's. */
   regions?: RegionSettingsMap;
   /**
-   * Every layout scene on this canvas, with its bound sources. Scenes, modifiers, and the standby line name
-   * participants by these keys, so the same keys on every canvas let one list of scenes serve them all. OBS allows
-   * the same scene name on different canvases, but source names are shared, so each canvas needs its own sources.
+   * Every participant on this canvas, with its layout scene and bound sources. Scenes, modifiers, and the standby line
+   * name participants by these keys, so the same keys on every canvas let one list of scenes serve them all. A key is
+   * also the participant's OBS scene unless its entry names another in `scene`. OBS allows the same scene name on
+   * different canvases, but source names are shared, so each canvas needs its own sources.
    */
   participants: Record<string, ParticipantPoolEntry>;
   /** Needed by scenes with a `standby` entry. */
@@ -232,6 +239,7 @@ export interface ScenesConfig {
 /**
  * One canvas's view of a config, which the layout and the tools work from: the canvas's container, options,
  * participants, and standby settings, its layers merged into `config` and `regions`, and only the scenes it shows,
- * with its own changes applied.
+ * with its own changes applied. Its participants are keyed by their OBS scenes, and the scenes, modifiers, and standby
+ * line name them so.
  */
 export interface CanvasScenesConfig extends Omit<ScenesConfig, 'canvases'>, Omit<CanvasConfig, 'canvas'> {}

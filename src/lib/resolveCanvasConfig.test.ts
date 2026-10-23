@@ -98,6 +98,56 @@ describe('resolveCanvas', () => {
     ).not.toHaveProperty('options');
   });
 
+  it('keys participants by their OBS scenes, and renames them so in the scenes, standby line, and modifiers', () => {
+    const named: ScenesConfig = {
+      ...config,
+      canvases: {
+        ...config.canvases,
+        portrait: {
+          ...config.canvases.portrait,
+          participants: {
+            A: { scene: 'A (V)', sources: { camera: { source: 'Cam A (V)' } } },
+            B: { scene: 'B (V)', sources: { camera: { source: 'Cam B (V)' } } },
+          },
+          standby: { textScene: 'Texts (V)', lineHeight: 540 },
+        },
+      },
+      modifiers: { Keyed: { config: {}, participants: ['B', 'Z'] }, Names: { config: { hasName: true } } },
+    };
+    const portrait = resolveCanvasConfig(named, 'portrait');
+
+    expect(portrait.participants).toEqual({
+      'A (V)': { sources: { camera: { source: 'Cam A (V)' } } },
+      'B (V)': { sources: { camera: { source: 'Cam B (V)' } } },
+    });
+    expect(portrait.scenes.Two).toEqual({ participants: [{ layout: 'A (V)' }, { layout: 'B (V)' }] });
+    expect(portrait.scenes.Standby).toEqual({ standby: { text: 'Soon', line: 'B (V)' } });
+    expect(portrait.modifiers).toEqual({
+      Keyed: { config: {}, participants: ['B (V)', 'Z'] },
+      Names: { config: { hasName: true } },
+    });
+    expect(resolveCanvasConfig(named, 'landscape').scenes.Two).toEqual({
+      participants: [{ layout: 'A' }, { layout: 'B' }],
+    });
+    expect(resolveCanvasConfig({ ...named, modifiers: undefined }, 'portrait')).not.toHaveProperty('modifiers');
+  });
+
+  it('fails on two participants of a canvas in the same OBS scene', () => {
+    const shared: ScenesConfig = {
+      ...config,
+      canvases: {
+        landscape: {
+          ...config.canvases.landscape,
+          participants: { A: { sources: {} }, B: { scene: 'A', sources: {} } },
+        },
+      },
+    };
+
+    expect(() => resolveCanvas(shared, 'landscape')).toThrow(
+      'config.canvases.landscape.participants: "A" and "B" both use the OBS scene "A"',
+    );
+  });
+
   it('fails on a canvas the config does not have', () => {
     expect(() => resolveCanvas(config, 'square')).toThrow(
       'No canvas "square" in the layout config. Known canvases: landscape, portrait',

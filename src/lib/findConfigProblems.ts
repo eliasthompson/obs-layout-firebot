@@ -144,7 +144,8 @@ export const findSceneProblems = (config: ScenesConfig): ConfigProblem[] => {
   const error = (message: string) => problems.push({ severity: 'error', message });
   const warning = (message: string) => problems.push({ severity: 'warning', message });
   const canvases = Object.keys(config.canvases).map((canvas) => ({ canvas, ...resolveCanvas(config, canvas) }));
-  const layouts = new Set(canvases.flatMap(({ config: view }) => Object.keys(view.participants)));
+  // Modifiers name participants by key; the canvases' views key them by their OBS scenes
+  const layouts = new Set(Object.values(config.canvases).flatMap(({ participants }) => Object.keys(participants)));
   const modifierNames = Object.keys(config.modifiers ?? {});
 
   for (const [name, modifier] of Object.entries(config.modifiers ?? {})) {

@@ -153,11 +153,11 @@ export default {
       // the line a text shows
       standby: { textScene: '[Widget] Standby Text', lineHeight: 540, textGap: 30 },
     },
-    // Optional: Aitum Vertical's canvas, by the name OBS lists it under; see Canvases. Its scene names may repeat the
-    // main canvas's, and the scenes name participants by the same keys
+    // Optional: Aitum Vertical's canvas, by the name OBS lists it under; see Canvases. The scenes name participants by
+    // the same keys, and its OBS scenes have names of their own, so the two canvases' scenes never look alike
     portrait: {
       canvas: 'Aitum Vertical',
-      container: '[Scene] Content',
+      container: '[Scene] Content (V)',
       options: {
         canvasWidth: 1080,
         canvasHeight: 1920,
@@ -168,7 +168,8 @@ export default {
         layoutGap: 18,
         regionBorder: 6,
       },
-      participants: { '[Layout] Person 1': person(1, ' (V)') },
+      // The same key, in the OBS scene `scene` names
+      participants: { '[Layout] Person 1': { ...person(1, ' (V)'), scene: '[Layout] Person 1 (V)' } },
       standby: { textScene: '[Widget] Standby Text', lineHeight: 540, textGap: 30 },
     },
   },
@@ -243,15 +244,15 @@ export default {
 
 Each canvas takes:
 
-| Field          | Meaning                                                                                                                                                               |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `canvas`       | Optional. The OBS canvas by name, as OBS lists it, such as `Aitum Vertical`; OBS's main canvas when left out.                                                         |
-| `container`    | OBS scene whose items are the canvas's participant layout scenes.                                                                                                     |
-| `options`      | `LayoutOptions` for the canvas, as in obs-layout-generator.                                                                                                           |
-| `config`       | Optional. This canvas's `LayoutConfig` layer, over the config's and under each participant's.                                                                         |
-| `regions`      | Optional. This canvas's region settings, over the config's and under each participant's.                                                                              |
-| `participants` | Every layout scene on the canvas, keyed by the name scenes use for it, with the source (and border) for each region and the participant's own `config` and `regions`. |
-| `standby`      | Needed for standby scenes on this canvas: `textScene`, `lineHeight`, `textGap`; see [Standby screens](#standby-screens).                                              |
+| Field          | Meaning                                                                                                                                                                                                                     |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `canvas`       | Optional. The OBS canvas by name, as OBS lists it, such as `Aitum Vertical`; OBS's main canvas when left out.                                                                                                               |
+| `container`    | OBS scene whose items are the canvas's participant layout scenes.                                                                                                                                                           |
+| `options`      | `LayoutOptions` for the canvas, as in obs-layout-generator.                                                                                                                                                                 |
+| `config`       | Optional. This canvas's `LayoutConfig` layer, over the config's and under each participant's.                                                                                                                               |
+| `regions`      | Optional. This canvas's region settings, over the config's and under each participant's.                                                                                                                                    |
+| `participants` | Every participant on the canvas, keyed by the name scenes use for it, with its layout scene in `scene` when that is not the key, the source (and border) for each region, and the participant's own `config` and `regions`. |
+| `standby`      | Needed for standby scenes on this canvas: `textScene`, `lineHeight`, `textGap`; see [Standby screens](#standby-screens).                                                                                                    |
 
 A scene entry may carry its own `options` and `duration`, a `standby` entry that makes it a standby screen, and
 `canvases`, what it changes on each canvas; see [Canvases](#canvases).
@@ -326,9 +327,15 @@ canvas needs neither.
   shows, or without `standby` settings for a standby scene, leaves the scene out too; `firebot:deploy` warns about
   those unless the scene says `false` for that canvas, and a scene no canvas shows is an error.
 - **Each canvas has its own scenes and sources.** OBS lets scene names repeat across canvases, so the vertical canvas
-  can have its own `[Scene] Content` and `[Layout] Person 1`. Source names are shared across canvases, and the layout
+  can have its own `[Scene] Content` and `[Layout] Person 1`. To tell them apart, give them names of their own, such
+  as `[Scene] Content (V)`: `container` names the canvas's container, and a participant entry's `scene` names its
+  layout scene, so its key stays the one the scenes use. Source names are shared across canvases, and the layout
   fades and resizes its sources, so each canvas needs its own groups, borders, and name texts, for example with a
   ` (V)` suffix. A capture, such as a camera, can still be shared by nesting it in each canvas's group.
+- **A scene is the size of its canvas.** OBS sizes a scene to the canvas it belongs to, and obs-websocket cannot give
+  one a size of its own. A vertical canvas's scene is 1080×1920, so a nested scene that has to keep a landscape
+  shape, such as a camera group whose item scales to fit with a crop, belongs on the main canvas, where the vertical
+  layout can still nest it, or needs a Crop/Pad filter that cuts it to that shape.
 - **Program switching.** The main canvas's container goes on program through OBS, another canvas's through Aitum
   Vertical, each only when that canvas shows another scene. OBS has no program scene for a canvas other than its main
   one, so no other plugin's canvas can be switched.
