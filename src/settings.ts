@@ -9,6 +9,7 @@ export * from '@/lib/filterSettings';
 export * from '@/lib/growRegion';
 export * from '@/lib/moveFilterName';
 export * from '@/lib/resolveBorderColor';
+export * from '@/lib/resolveCanvasConfig';
 export * from '@/lib/resolveModifiers';
 export * from '@/lib/resolveParticipantConfig';
 export * from '@/lib/resolveRegionSettings';

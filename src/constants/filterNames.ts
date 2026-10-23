@@ -6,7 +6,7 @@ export const DEFAULT_DURATION = 300;
 export const DEFAULT_STANDBY_TEXT_GAP = 30;
 /** Move Source filters are named `Move: <source>` on the scene that contains the source. */
 export const MOVE_FILTER_PREFIX = 'Move:';
-/** Filters on the toggled sources themselves. Inputs and scenes are global in OBS, so these need no source name. */
+/** Filters on the toggled sources themselves, one of each per source, so their names need no source name. */
 export const WIDTH_FILTER_NAME = 'Move: Width';
 export const HEIGHT_FILTER_NAME = 'Move: Height';
 export const OPACITY_FILTER_NAME = 'Opacity';

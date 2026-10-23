@@ -77,7 +77,7 @@ describe('createPresetEffectList for modifiers', () => {
 
 describe('createPresetEffectLists', () => {
   it("makes one preset per scene key, by id, for the config's variable", () => {
-    const config = { container: 'C', participants: {}, scenes: { A: { participants: [] }, B: { participants: [] } } };
+    const config = { canvases: {}, scenes: { A: { participants: [] }, B: { participants: [] } } };
     const a = createPresetEffectList('A');
     const b = createPresetEffectList('B');
 
@@ -89,8 +89,7 @@ describe('createPresetEffectLists', () => {
 
   it('adds an on and an off preset per modifier, and a reset, after the scenes', () => {
     const config = {
-      container: 'C',
-      participants: {},
+      canvases: {},
       scenes: { A: { participants: [] } },
       modifiers: { Keyed: { config: {} }, Timer: { config: {} } },
     };

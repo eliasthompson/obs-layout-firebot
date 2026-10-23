@@ -10,11 +10,12 @@ Firebot custom script, plus the `obs-layout-firebot` CLI to install and operate 
 - `npm run lint` / `npm run lint:fix`: ESLint with type-aware rules
 - `npm run format` / `npm run format:check`: Prettier
 - `npm run test` / `npm run test:coverage` / `npm run test:watch`: Vitest
-- `npm run build`: tsdown, emits `dist/obs-layout.js` (the Firebot script, one CommonJS file with the library bundled
-  in), `dist/index.js` and `dist/index.d.ts` (the library and config types), `dist/settings.js` and its types (the
+- `npm run build`: tsdown, emits `dist/obs-layout.js` (the Firebot script, one CommonJS file with the library and
+  obs-layout-generator bundled in), `dist/index.js` and `dist/index.d.ts` (the library and config types), `dist/settings.js` and its types (the
   portable `settings` subpath), and `dist/cli.js` (the CLI). The `exports` field is generated from these entries.
 - `npm run dev`: tsdown in watch mode, so a project that links this checkout runs the current source. The CLI's
-  commands (`obs:deploy`, `obs:restart`, `obs:verify`, `obs:capture`, `firebot:deploy`, `firebot:restart`) run there,
+  commands (`obs:deploy`, `obs:restart`, `obs:verify`, `obs:capture`, `obs:prune`, `firebot:deploy`,
+  `firebot:restart`, `firebot:prune`) run there,
   against that project's config. Commands are grouped by the program they act on, and each deploy is the one command
   for its side; the steps it is made of live in `tools/lib`. See README.md
 
@@ -23,6 +24,9 @@ Before finishing a change, run typecheck, lint, format check, test coverage, and
 ## Layout
 
 - `src/constants/`, `src/lib/`, `src/types/`: source, one export group per file.
+- `src/types/ScenesConfig.ts`: the config. Its `canvases` hold each OBS canvas's container, options, participants, and
+  standby; scenes and modifiers are shared. Everything that lays out or checks one canvas works from that canvas's
+  view, a `CanvasScenesConfig` from `resolveCanvasConfig`, which has the version 3 shape, so it stays canvas-agnostic.
 - `src/index.ts`: the only index file and the library entry; `export *` for every file (`export type *` for type-only
   files). Do not add per-directory index files.
 - `src/settings.ts`: the entry behind `@eliasthompson/obs-layout-firebot/settings`: the constants, settings builders,
@@ -60,6 +64,12 @@ Before finishing a change, run typecheck, lint, format check, test coverage, and
   entries, then the platform default. Add new ones to `tools/lib/environment.ts`, `.env.example`, and the README.
 - The tools run on Windows, macOS, and Linux. Anything platform-specific goes through `process.platform` with a case
   per platform, not a separate script per OS.
+- Requests are built with names, as for OBS's main canvas. A request's `canvasUuid` limits every name in it to that
+  canvas, inputs included, though inputs belong to the main canvas, so never add it across the board: requests for
+  another canvas go through `addressRequest` or `addressClient`, which address its scenes and sources by UUID from a
+  `readAddressBook`. Its program scene switches through Aitum Vertical's vendor requests (`aitumProgram.ts`), since
+  OBS has none for another canvas. Landscape-only configs never touch canvas requests, so they keep the OBS 28
+  minimum.
 - obs-move-transition setting values live in `src/constants/moveTransition.ts` with the header they come from. Do not
   use a Move Value filter in its "settings" mode on a color source: it rewrites the color.
 - Changes to the request batch order (disable, write, sleep, enable) need a reason in a comment; the order works
@@ -79,5 +89,10 @@ Before finishing a change, run typecheck, lint, format check, test coverage, and
 - Do not use `baseUrl` in tsconfig; `paths` resolves relative to the tsconfig file.
 - `src/` runs inside Firebot's Electron main process and uses Node built-ins and the global `WebSocket`; it is not
   platform-neutral and does not need to be. The CLI needs Node 22.4 or later for the global `WebSocket`.
+- `@eliasthompson/obs-layout-generator` is a peer dependency, and a dev dependency for the build and tests: the
+  config types are built on its types, and a project that writes a config uses it too, so there must be one copy.
+  The library and the CLI import the project's copy. Only `dist/obs-layout.js` bundles it, because Firebot loads that
+  file from the profile without a `node_modules`; the CLI build inlines the generator's `package.json` so
+  `firebot:deploy` can warn when the project's version differs from the bundled one.
 - To work against an unreleased `@eliasthompson/obs-layout-generator`, link the sibling repo with
   `npx link ../obs-layout-generator` instead of changing the dependency in package.json.

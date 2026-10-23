@@ -2,11 +2,11 @@
 // script drives, and gives region items a bounds type a rectangle can size. Borders render at native size (no
 // bounds) and get Move Value filters for their own width and height, plus, with a `borderColor` config, a Move Value
 // filter that fades their color filter's setting. Every toggled source but standby text gets an Opacity color filter
-// plus the Move Value filter that animates it, and the standby text scene is cropped at the canvas center. Move
+// plus the Move Value filter that animates it, and the standby text scene is cropped at the line's middle. Move
 // Source filters on the managed scenes that no longer match a bound item (renamed or removed sources) are deleted.
 // Idempotent: existing filters are updated only where they differ, never duplicated.
 import type { ObsClient } from '@/lib/connectObs';
-import type { ScenesConfig } from '@/types/ScenesConfig';
+import type { CanvasScenesConfig } from '@/types/ScenesConfig';
 
 import {
   COLOR_MOVE_FILTER_NAME,
@@ -60,10 +60,12 @@ const moveTiming = { custom_duration: true, enabled_match_moving: true };
 export interface SetupOptions {
   /** Report every change without making it. */
   dryRun: boolean;
+  /** A prefix naming the canvas in the output. */
+  label?: string;
 }
 
 /** Set OBS up for the config over an open connection. Returns how many changes were made, or would be made. */
-export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun }: SetupOptions) => {
+export const runSetup = async (client: ObsClient, config: CanvasScenesConfig, { dryRun, label = '' }: SetupOptions) => {
   const bindings = listBindings(config);
   const borderColor = resolveBorderColor(config);
   const would = dryRun ? 'WOULD ' : '';
@@ -87,12 +89,12 @@ export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun
   ) => {
     const existing = (await filtersOf(sourceName)).find((filter) => filter.filterName === filterName);
     if (existing && existing.filterKind !== filterKind) {
-      console.log(`SKIP    ${sourceName} / ${filterName} exists but is a ${existing.filterKind}`);
+      console.log(`SKIP    ${label}${sourceName} / ${filterName} exists but is a ${existing.filterKind}`);
       return false;
     }
     if (existing?.filterEnabled === enabled && containsValues(filterSettings, existing.filterSettings)) return true;
     changes += 1;
-    console.log(`${would}${existing ? 'UPDATE' : 'CREATE'}  ${sourceName} / ${filterName}`);
+    console.log(`${would}${existing ? 'UPDATE' : 'CREATE'}  ${label}${sourceName} / ${filterName}`);
     if (dryRun) return true;
     if (existing) {
       await client.call('SetSourceFilterSettings', { sourceName, filterName, filterSettings, overlay: true });
@@ -118,7 +120,7 @@ export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun
         !wanted.has(filter.filterName);
       if (stale) {
         changes += 1;
-        console.log(`${would}REMOVE  ${scene} / ${filter.filterName} (no bound item)`);
+        console.log(`${would}REMOVE  ${label}${scene} / ${filter.filterName} (no bound item)`);
         if (!dryRun) await client.call('RemoveSourceFilter', { sourceName: scene, filterName: filter.filterName });
       }
     }
@@ -140,7 +142,7 @@ export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun
   for (const { scene, source, kind, boundsAlignment } of bindings) {
     const item = itemsByScene.get(scene)?.find((candidate) => candidate.sourceName === source);
     if (!item) {
-      console.log(`SKIP    ${scene} has no item "${source}"`);
+      console.log(`SKIP    ${label}${scene} has no item "${source}"`);
       continue;
     }
 
@@ -169,7 +171,7 @@ export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun
       );
       if (transformChanges.length) {
         console.log(
-          `${would}TRANSFORM ${scene} / ${source}: ${transformChanges.map(([key, value]) => `${key}=${String(value)}`).join(', ')}`,
+          `${would}TRANSFORM ${label}${scene} / ${source}: ${transformChanges.map(([key, value]) => `${key}=${String(value)}`).join(', ')}`,
         );
         await setTransform(scene, item.sceneItemId, {
           ...Object.fromEntries(transformChanges),
@@ -234,7 +236,7 @@ export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun
       if (borderColor) {
         const hasColorFilter = (await filtersOf(source)).some((filter) => filter.filterName === borderColor.filter);
         if (!hasColorFilter) {
-          console.log(`SKIP    ${source} has no "${borderColor.filter}" filter to color (borderColor.filter)`);
+          console.log(`SKIP    ${label}${source} has no "${borderColor.filter}" filter to color (borderColor.filter)`);
         } else {
           const settings = (
             await client.call('GetSourceFilter', { sourceName: source, filterName: borderColor.filter })
@@ -254,25 +256,25 @@ export const runSetup = async (client: ObsClient, config: ScenesConfig, { dryRun
   }
 
   if (config.standby) {
-    // The text scene shows nothing left of the line's middle, so text slides out from behind the line. Cropping a
-    // scene item moves what is left of it to the item's position, so the item sits at the cut too.
-    const { textScene, lineHeight } = config.standby;
-    const { cut } = standbyLine(config, lineHeight);
+    // The text scene shows nothing on the hidden side of the line's middle, left of an upright line or below one
+    // across, so text slides out from behind the line
+    const { textScene, lineLength } = config.standby;
+    const line = standbyLine(config, lineLength);
     const item = itemsByScene.get(config.container)?.find((candidate) => candidate.sourceName === textScene);
     if (item) {
       const transform = (
         await client.call('GetSceneItemTransform', { sceneName: config.container, sceneItemId: item.sceneItemId })
       ).sceneItemTransform as Record<string, unknown>;
-      const wanted = { positionX: cut, positionY: 0, alignment: 5, cropLeft: cut };
+      const wanted = { ...line.textScene, alignment: 5 };
       const transformChanges = Object.entries(wanted).filter(([key, value]) => transform[key] !== value);
       if (transformChanges.length) {
         console.log(
-          `${would}TRANSFORM ${config.container} / ${textScene}: ${transformChanges.map(([key, value]) => `${key}=${String(value)}`).join(', ')}`,
+          `${would}TRANSFORM ${label}${config.container} / ${textScene}: ${transformChanges.map(([key, value]) => `${key}=${String(value)}`).join(', ')}`,
         );
         await setTransform(config.container, item.sceneItemId, Object.fromEntries(transformChanges));
       }
     } else {
-      console.log(`SKIP    ${config.container} has no item "${textScene}"`);
+      console.log(`SKIP    ${label}${config.container} has no item "${textScene}"`);
     }
   }
 

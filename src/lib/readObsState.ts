@@ -1,12 +1,13 @@
 import type { ObsClient } from '@/lib/connectObs';
 import type { ObsRequest } from '@/types/ObsRequest';
 import type { ObsSceneItem, ObsState } from '@/types/ObsState';
-import type { LayoutRegionName, ScenesConfig } from '@/types/ScenesConfig';
+import type { CanvasScenesConfig, LayoutRegionName } from '@/types/ScenesConfig';
 
-import { WIDTH_FILTER_NAME } from '@/constants/filterNames';
+import { HEIGHT_FILTER_NAME, WIDTH_FILTER_NAME } from '@/constants/filterNames';
 import { REQUEST_BATCH_EXECUTION_SERIAL_REALTIME } from '@/constants/obsWebSocket';
 import { resolveRegionSettings } from '@/lib/resolveRegionSettings';
 import { sizesFont } from '@/lib/sizesFont';
+import { standbyLine } from '@/lib/standbyLine';
 
 /** The parts of a GetSceneItemList item the state keeps. */
 interface ReportedSceneItem extends Omit<ObsSceneItem, 'sourceSize'> {
@@ -15,12 +16,12 @@ interface ReportedSceneItem extends Omit<ObsSceneItem, 'sourceSize'> {
 
 /**
  * Read what a transition starts from. Standby needs the items of the container, the standby text scene, and every
- * layout scene, and the width each border was last moved to. A text source sized to its region needs its layout
- * scene's items, for how tall it renders, and its current font size. A config that needs neither reads nothing.
- * Anything OBS cannot answer is left out, and the move batch reports the missing item itself.
+ * layout scene, and how thick across the line each border was last sized. A text source sized to its region needs its
+ * layout scene's items, for how tall it renders, and its current font size. A config that needs neither reads
+ * nothing. Anything OBS cannot answer is left out, and the move batch reports the missing item itself.
  */
-export const readObsState = async (client: ObsClient, config: ScenesConfig): Promise<ObsState> => {
-  const state: ObsState = { sceneItems: {}, borderWidths: {}, fontSizes: {} };
+export const readObsState = async (client: ObsClient, config: CanvasScenesConfig): Promise<ObsState> => {
+  const state: ObsState = { sceneItems: {}, borderThickness: {}, fontSizes: {} };
   const bindings = Object.values(config.participants).flatMap((entry) => Object.values(entry.sources));
   // A text is sized when any layer sizes it: the config's regions, the participant's, or any scene's settings for it
   const sceneRegions = Object.values(config.scenes).flatMap((scene) =>
@@ -50,11 +51,16 @@ export const readObsState = async (client: ObsClient, config: ScenesConfig): Pro
   const borders = config.standby
     ? [...new Set(bindings.flatMap((binding) => (binding.border ? [binding.border] : [])))]
     : [];
+  // A border's thickness across the line is its width beside an upright line, its height beside one across
+  const thicknessFilter =
+    config.standby && standbyLine(config, config.standby.lineLength).isHorizontal
+      ? HEIGHT_FILTER_NAME
+      : WIDTH_FILTER_NAME;
   const requests: ObsRequest[] = [
     ...scenes.map((sceneName) => ({ requestType: 'GetSceneItemList', requestData: { sceneName } })),
     ...borders.map((sourceName) => ({
       requestType: 'GetSourceFilter',
-      requestData: { sourceName, filterName: WIDTH_FILTER_NAME },
+      requestData: { sourceName, filterName: thicknessFilter },
     })),
     ...texts.map((inputName) => ({ requestType: 'GetInputSettings', requestData: { inputName } })),
   ];
@@ -76,8 +82,8 @@ export const readObsState = async (client: ObsClient, config: ScenesConfig): Pro
   });
   borders.forEach((border, index) => {
     const result = results[scenes.length + index];
-    const width = (result.responseData?.filterSettings as undefined | { setting_int?: unknown })?.setting_int;
-    if (result.requestStatus.result && typeof width === 'number') state.borderWidths[border] = width;
+    const thickness = (result.responseData?.filterSettings as undefined | { setting_int?: unknown })?.setting_int;
+    if (result.requestStatus.result && typeof thickness === 'number') state.borderThickness[border] = thickness;
   });
   texts.forEach((source, index) => {
     const result = results[scenes.length + borders.length + index];

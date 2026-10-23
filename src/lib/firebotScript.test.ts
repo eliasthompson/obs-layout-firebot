@@ -8,8 +8,9 @@ import { version as packageVersion } from '#package.json';
 import { createRun, getDefaultParameters, getScriptManifest } from '@/lib/firebotScript';
 
 const config = {
-  container: 'C',
-  participants: { L: { sources: { camera: { source: 'cam', border: 'edge' } } } },
+  canvases: {
+    main: { container: 'C', participants: { L: { sources: { camera: { source: 'cam', border: 'edge' } } } } },
+  },
   // No main content, so the camera takes the main column and is shown on a default canvas
   scenes: { only: { participants: [{ layout: 'L', config: { contentMain: null } }] } },
   modifiers: { Keyed: { config: { camera: { isGreenScreen: true } } } },
@@ -173,6 +174,28 @@ describe('createRun', () => {
       errorMessage: 'OBS Layout: no modifier "Keyed" in the layout config.',
     });
     expect(connect).not.toHaveBeenCalled();
+  });
+
+  it('warns about a canvas OBS does not have, and still applies the scene on the rest', async () => {
+    const { connect } = fakeConnect(allOk);
+    const run = createRun({ profileDir: '/profile', connect, readIntegrations: () => integrations });
+    const dual = {
+      ...config,
+      canvases: {
+        ...config.canvases,
+        portrait: {
+          canvas: 'Aitum Vertical',
+          container: 'C',
+          participants: { L: { sources: { camera: { source: 'cam (V)' } } } },
+        },
+      },
+    };
+    const { runRequest, logs } = request({ sceneKey: 'only' }, dual);
+
+    await expect(run(runRequest)).resolves.toEqual({ success: true });
+    expect(logs.slice(1)).toEqual([
+      'warn OBS Layout: left the "portrait" canvas as it is: OBS cannot list its canvases to find "Aitum Vertical"; that takes OBS 32.1 or later.',
+    ]);
   });
 
   it('reads another variable, accepts JSON text, and uses the config connection over the profile', async () => {

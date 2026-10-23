@@ -8,7 +8,6 @@
 //   obs-layout-firebot firebot:restart [--config config/scenes.ts] [--profile-dir <Firebot profile folder>] [--yes]
 //     [--dry-run]
 import { copyFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import type { FirebotSettingsFile } from '@/lib/enableScriptSettings';
@@ -20,7 +19,15 @@ import { enableScriptSettings } from '@/lib/enableScriptSettings';
 import { mergeLayoutPresets } from '@/lib/mergeLayoutPresets';
 
 import { FIREBOT_PROCESS_NAME, firebotApp } from '../lib/apps';
-import { backupPath, confirm, firebotProfileDir, loadOptionalConfig, readJson, writeJson } from '../lib/environment';
+import {
+  backupPath,
+  confirm,
+  firebotProfileDir,
+  firebotProfileFiles,
+  loadOptionalConfig,
+  readJson,
+  writeJson,
+} from '../lib/environment';
 import { describeRestart, isRunning, restartApp } from '../lib/processes';
 
 export interface RestartFirebotOptions {
@@ -28,12 +35,9 @@ export interface RestartFirebotOptions {
   profileDir?: string;
 }
 
-/** The profile's presets file, which Firebot reads at startup and writes when presets change in its UI. */
-const profilePresetsPath = (profileDir: string) => join(profileDir, 'effects', 'preset-effect-lists.json');
-
-/** The presets the profile holds, by id. */
+/** The presets the profile holds, by id: its presets file, which Firebot reads at startup and writes from its UI. */
 export const readProfilePresets = (profileDir: string): Record<string, StoredPreset> => {
-  const path = profilePresetsPath(profileDir);
+  const path = firebotProfileFiles(profileDir).presets;
   return existsSync(path) ? (readJson(path) as Record<string, StoredPreset>) : {};
 };
 
@@ -43,7 +47,7 @@ const installProfileFiles = (profileDir: string, config: ScenesConfig | undefine
 
   // The config owns every layout preset; presets made for other things stay in the profile
   if (config) {
-    const target = profilePresetsPath(profileDir);
+    const target = firebotProfileFiles(profileDir).presets;
     const merge = mergeLayoutPresets(readProfilePresets(profileDir), createPresetEffectLists(config));
     if (!dryRun) {
       if (existsSync(target)) copyFileSync(target, backupPath(target));
@@ -57,7 +61,7 @@ const installProfileFiles = (profileDir: string, config: ScenesConfig | undefine
   }
 
   // The settings the script needs
-  const settingsPath = join(profileDir, 'settings.json');
+  const settingsPath = firebotProfileFiles(profileDir).settings;
   if (existsSync(settingsPath)) {
     const { file, changed } = enableScriptSettings(readJson(settingsPath) as FirebotSettingsFile);
     if (changed.length) {

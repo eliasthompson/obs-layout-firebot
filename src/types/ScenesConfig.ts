@@ -43,6 +43,12 @@ export interface SourceBinding {
 }
 
 export interface ParticipantPoolEntry {
+  /**
+   * The OBS scene that holds this participant's items on this canvas, nested in the container; the participant's key
+   * when left out. Lets every canvas keep the same keys, so one list of scenes serves them all, while each canvas
+   * names its own layout scenes, such as `[Layout] Person 1 (V)`.
+   */
+  scene?: string;
   sources: Partial<Record<LayoutRegionName, SourceBinding>>;
   /** This participant's own region settings, over the config's `regions` and under a scene's. */
   regions?: RegionSettingsMap;
@@ -54,7 +60,7 @@ export interface ParticipantPoolEntry {
 }
 
 export interface SceneParticipant {
-  /** Key in `participants`: the OBS scene that holds this participant's items, nested in the container. */
+  /** Key in each canvas's `participants`, whose entry names the OBS scene that holds this participant's items. */
   layout: string;
   /**
    * What this composition changes for the participant, merged over their pool config: a region config or `null`
@@ -74,7 +80,7 @@ export interface SceneParticipant {
  */
 export interface Modifier {
   config: LayoutConfig;
-  /** Only these participants, by their key in `participants`; every participant when left out. */
+  /** Only these participants, by their key in each canvas's `participants`; every participant when left out. */
   participants?: string[];
 }
 
@@ -95,14 +101,27 @@ export interface StandbyBinding {
   text?: string;
   /** Items of the container that fade in at their regions while the text slides out. */
   widgets?: OverlayBinding[];
-  /** The participant whose main border becomes the line, by its key in `participants`. Default the first one. */
+  /** The participant whose main border becomes the line, by its key in each canvas's `participants`. Default the first one. */
   line?: string;
+}
+
+/** What a scene changes on one canvas. */
+export interface SceneCanvasBinding {
+  /** The participants this canvas shows instead of the scene's, in layout order. */
+  participants?: SceneParticipant[];
+  /** Options over the scene's, on this canvas. */
+  options?: LayoutOptions;
+  /**
+   * A standby scene's text, widgets, or line on this canvas, over the scene's: each canvas has its own text sources
+   * and canvas pixels.
+   */
+  standby?: StandbyBinding;
 }
 
 export interface SceneBinding {
   /**
-   * The participants shown, in layout order. A standby scene leaves it out: every participant collapses into the
-   * line, and anything else is hidden.
+   * The participants shown, in layout order, by their key in each canvas's `participants`. A standby scene leaves it
+   * out: every participant collapses into the line, and anything else is hidden.
    */
   participants?: SceneParticipant[];
   options?: LayoutOptions;
@@ -112,14 +131,27 @@ export interface SceneBinding {
   standby?: StandbyBinding;
   /** Modifiers this scene forces on (`true`) or off (`false`), whatever is active, by their key in `modifiers`. */
   modifiers?: Record<string, boolean>;
+  /**
+   * Per canvas, by its key in `canvases`: what the scene changes there, or `false` to leave that canvas as it is. A
+   * canvas without every participant the scene shows, or without standby settings for a standby scene, leaves the
+   * scene out too.
+   */
+  canvases?: Record<string, false | SceneCanvasBinding>;
 }
 
 export interface StandbySettings {
   /** Scene in the container, below the participant layouts, that holds every standby text and hides what is left of the line. */
   textScene: string;
-  /** Height of the line in pixels. Its width is the border on both sides: 2 × regionBorder. */
-  lineHeight: number;
-  /** Pixels between the line and a standby text, which shows at its rendered size, centered on the line. Default 30. */
+  /**
+   * Length of the line in pixels: up the middle of a landscape canvas, across the middle of a portrait one (as
+   * `options.orientation` decides, or the canvas's shape when it is `auto`). Its thickness is the border on both
+   * sides: 2 × regionBorder.
+   */
+  lineLength: number;
+  /**
+   * Pixels between the line and a standby text, which shows at its rendered size, centered on the line: right of an
+   * upright line, above one across. Default 30.
+   */
   textGap?: number;
 }
 
@@ -163,10 +195,37 @@ export interface FirebotSettings {
   executable?: string;
 }
 
-export interface ScenesConfig {
-  /** OBS scene that contains every participant layout scene as an item. */
+/** An OBS canvas the config lays out: the scene that holds its participants, their layout scenes, and its options. */
+export interface CanvasConfig {
+  /**
+   * The OBS canvas by name, as OBS lists it, such as "Aitum Vertical"; OBS's main canvas when left out. Any other
+   * canvas needs OBS 32.1 or later, and has its program scene switched through Aitum Vertical.
+   */
+  canvas?: string;
+  /** OBS scene that contains every participant layout scene of this canvas as an item. */
   container: string;
   options?: LayoutOptions;
+  /** This canvas's layout config layer, over the config's `config` and under each participant's. */
+  config?: LayoutConfig;
+  /** This canvas's region settings, over the config's `regions` and under each participant's. */
+  regions?: RegionSettingsMap;
+  /**
+   * Every participant on this canvas, with its layout scene and bound sources. Scenes, modifiers, and the standby line
+   * name participants by these keys, so the same keys on every canvas let one list of scenes serve them all. A key is
+   * also the participant's OBS scene unless its entry names another in `scene`. OBS allows the same scene name on
+   * different canvases, but source names are shared, so each canvas needs its own sources.
+   */
+  participants: Record<string, ParticipantPoolEntry>;
+  /** Needed by scenes with a `standby` entry. */
+  standby?: StandbySettings;
+}
+
+export interface ScenesConfig {
+  /**
+   * The OBS canvases to lay out, by a key of your choosing, such as `landscape` and `portrait`. A preset applies its
+   * scene on every canvas that shows it, in one frame-synced batch.
+   */
+  canvases: Record<string, CanvasConfig>;
   /**
    * Pixels the border sources' filters, such as a shadow, add outside the border on every side. The border item sits
    * this much further out, so its color source still fills the border box. `regionBorder` is the visible border.
@@ -180,15 +239,19 @@ export interface ScenesConfig {
   config?: LayoutConfig;
   /** Region settings every participant starts from, under their own and the scenes'. */
   regions?: RegionSettingsMap;
-  /** Every layout scene the installation knows, with its bound sources. */
-  participants: Record<string, ParticipantPoolEntry>;
   /** Compositions by scene key, each listing the participants it shows in layout order. */
   scenes: Record<string, SceneBinding>;
   /** Layout configs presets switch on and off over the scenes, by name, applied in this order. */
   modifiers?: Record<string, Modifier>;
-  /** Needed by scenes with a `standby` entry. */
-  standby?: StandbySettings;
   /** Overrides Firebot's OBS integration settings. */
   obs?: ObsSettings;
   firebot?: FirebotSettings;
 }
+
+/**
+ * One canvas's view of a config, which the layout and the tools work from: the canvas's container, options,
+ * participants, and standby settings, its layers merged into `config` and `regions`, and only the scenes it shows,
+ * with its own changes applied. Its participants are keyed by their OBS scenes, and the scenes, modifiers, and standby
+ * line name them so.
+ */
+export interface CanvasScenesConfig extends Omit<ScenesConfig, 'canvases'>, Omit<CanvasConfig, 'canvas'> {}

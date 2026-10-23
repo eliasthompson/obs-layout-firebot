@@ -91,7 +91,9 @@ export const adjustInsetRatios = (
       const innerWidth = region.width - target.inset * 2;
       const innerHeight = region.height - target.inset * 2;
       if (innerWidth <= 0 || innerHeight <= 0) continue;
-      if (Math.abs(innerHeight - innerWidth / target.wanted) < 0.5) continue;
+      // The layout rounds region edges to whole pixels, so a centered region grows two pixels at a time and some
+      // ratios come no closer than half a pixel
+      if (Math.abs(innerHeight - innerWidth / target.wanted) <= 0.5) continue;
 
       // Too wide inside means the region needs to be taller, so its outer ratio shrinks, and the other way round
       settled = false;

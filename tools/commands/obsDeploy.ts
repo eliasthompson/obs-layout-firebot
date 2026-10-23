@@ -1,6 +1,6 @@
-// Deploys the config to OBS in one go: runs the setup over the websocket, then, when the scene items' show and hide
-// transitions need setting, restarts OBS around writing them, since only the scene collection file holds them and OBS
-// only reads it at startup. OBS writes the collection on exit, so the setup's filters are saved before the file is
+// Deploys the config to OBS in one go: runs the setup over the websocket on every canvas OBS has, then, when the scene
+// items' show and hide transitions need setting, restarts OBS around writing them, since only the scene collection
+// file holds them and OBS only reads it at startup. OBS writes the collection on exit, so the setup's filters are saved before the file is
 // edited. Asks before restarting, never closes OBS while it is streaming or recording, and never forces it: an OBS that
 // cannot be closed from here is left for you to close, and then to start again. --dry-run reports every change
 // without touching OBS or the file.
@@ -9,7 +9,10 @@
 //     [--collection <path>] [--yes] [--no-restart] [--dry-run]
 import { parseArgs } from 'node:util';
 
+import type { FadesCanvas } from '../lib/fades';
+
 import { obsApp } from '../lib/apps';
+import { canvasLabel, openCanvases } from '../lib/canvases';
 import {
   confirm,
   DEFAULT_CONFIG_PATH,
@@ -45,8 +48,19 @@ export const obsDeploy = async (args: string[]) => {
   const client = await connectObsPatiently(toolObsConnection(config));
   let activeCollection: string;
   let live: boolean;
+  let fadesCanvases: FadesCanvas[];
   try {
-    const changes = await runSetup(client, config, { dryRun });
+    const canvases = await openCanvases(client, config);
+    let changes = 0;
+    for (const canvas of canvases) {
+      changes += await runSetup(canvas.client, canvas.config, { dryRun, label: canvasLabel(config, canvas.key) });
+    }
+    fadesCanvases = canvases.map(({ key, config: canvasConfig, uuid, isMain }) => ({
+      config: canvasConfig,
+      uuid,
+      isMain,
+      label: canvasLabel(config, key),
+    }));
     console.log(
       dryRun ? `dry run: ${String(changes)} setup changes would be made` : `setup done, ${String(changes)} changes`,
     );
@@ -62,7 +76,7 @@ export const obsDeploy = async (args: string[]) => {
   // The file on disk is what OBS last saved: enough to see which items would change, and an item it does not hold yet
   // is probably unsaved, which the restart saves before the file is written
   console.log(`item transitions in ${collectionPath}:`);
-  const pending = writeFades(config, collectionPath, { ...fadeOptions, dryRun: true });
+  const pending = writeFades(fadesCanvases, collectionPath, { ...fadeOptions, dryRun: true });
   if (!pending.changed && !pending.missing) {
     console.log(
       dryRun ? 'dry run: OBS would need no restart' : 'the item transitions are set, so OBS needs no restart; deployed',
@@ -83,7 +97,7 @@ export const obsDeploy = async (args: string[]) => {
   }
 
   await restartApp(obsApp(config), () => {
-    writeFades(config, collectionPath, { ...fadeOptions, dryRun: false });
+    writeFades(fadesCanvases, collectionPath, { ...fadeOptions, dryRun: false });
   });
   console.log('deployed to OBS');
 };

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { MoveStep } from '@/types/MoveStep';
 
-import { buildMoveRequests } from '@/lib/buildMoveRequests';
+import { buildMovePhases, buildMoveRequests, joinMovePhases, mapMovePhases } from '@/lib/buildMoveRequests';
 import { filterWrites } from '@/lib/filterWrites';
 
 const layout: MoveStep = {
@@ -122,5 +122,38 @@ describe('buildMoveRequests', () => {
 
   it('builds just the settle sleep for no steps', () => {
     expect(buildMoveRequests([])).toEqual([{ requestType: 'Sleep', requestData: { sleepFrames: 2 } }]);
+  });
+
+  it('joins the canvases stage by stage, so every canvas moves in the same frames', () => {
+    const left = buildMovePhases([layout]);
+    const right = buildMovePhases([border]);
+    const joined = joinMovePhases([left, right]);
+    const sleeps = joined.flatMap((request, index) => (request.requestType === 'Sleep' ? [index] : []));
+
+    expect(joined).toEqual([
+      ...left.prepare,
+      ...right.prepare,
+      { requestType: 'Sleep', requestData: { sleepFrames: 2 } },
+      ...right.sizes,
+      { requestType: 'Sleep', requestData: { sleepFrames: 1 } },
+      ...left.moves,
+      ...right.moves,
+    ]);
+    expect(sleeps).toHaveLength(2);
+    expect(buildMoveRequests([layout, border])).toEqual(joinMovePhases([buildMovePhases([layout, border])]));
+  });
+
+  it('passes every stage through a function', () => {
+    const phases = buildMovePhases([border]);
+    const tagged = mapMovePhases(phases, (request) => ({
+      ...request,
+      requestData: { ...request.requestData, tag: 1 },
+    }));
+
+    for (const stage of ['prepare', 'handoffs', 'sizes', 'moves'] as const) {
+      expect(tagged[stage]).toEqual(
+        phases[stage].map((request) => ({ ...request, requestData: { ...request.requestData, tag: 1 } })),
+      );
+    }
   });
 });

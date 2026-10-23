@@ -2,7 +2,7 @@ import type { LayoutConfig } from '@eliasthompson/obs-layout-generator';
 
 import { mergeLayoutConfigs } from '@eliasthompson/obs-layout-generator';
 
-import type { SceneParticipant, ScenesConfig } from '@/types/ScenesConfig';
+import type { CanvasScenesConfig, SceneParticipant } from '@/types/ScenesConfig';
 
 /**
  * The layout config a shown participant gets, built up in layers: the config's `config`, then the participant's pool
@@ -15,7 +15,7 @@ import type { SceneParticipant, ScenesConfig } from '@/types/ScenesConfig';
  * @returns The merged config, ready for obs-layout-generator.
  */
 export const resolveParticipantConfig = (
-  config: Pick<ScenesConfig, 'config' | 'modifiers' | 'participants'>,
+  config: Pick<CanvasScenesConfig, 'config' | 'modifiers' | 'participants'>,
   participant: SceneParticipant,
   modifiers: readonly string[],
 ): LayoutConfig => {
