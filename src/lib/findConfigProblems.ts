@@ -10,6 +10,7 @@ import {
   OPACITY_MOVE_FILTER_NAME,
   WIDTH_FILTER_NAME,
 } from '@/constants/filterNames';
+import { findSharedSourceProblems } from '@/lib/findSharedSourceProblems';
 import { listBindings } from '@/lib/listBindings';
 import { listOverlays } from '@/lib/listOverlays';
 import { moveFilterName } from '@/lib/moveFilterName';
@@ -135,9 +136,9 @@ export const findConfigProblems = (config: CanvasScenesConfig, inventory: ObsInv
 
 /**
  * Everything in the scenes and modifiers every canvas shares that would make a preset fail: a scene that shows no
- * participants or no canvas, a forced modifier or a modifier participant that does not exist. A scene a canvas leaves
- * out because the canvas lacks what it shows is a warning, since it may be on purpose; the scene's
- * `canvases: { <canvas>: false }` says so.
+ * participants or no canvas, a forced modifier or a modifier participant that does not exist, and a source canvases
+ * share that they would not fade alike (`findSharedSourceProblems`). A scene a canvas leaves out because the canvas
+ * lacks what it shows is a warning, since it may be on purpose; the scene's `canvases: { <canvas>: false }` says so.
  */
 export const findSceneProblems = (config: ScenesConfig): ConfigProblem[] => {
   const problems: ConfigProblem[] = [];
@@ -178,5 +179,5 @@ export const findSceneProblems = (config: ScenesConfig): ConfigProblem[] => {
     }
   }
 
-  return problems;
+  return [...problems, ...findSharedSourceProblems(config)];
 };

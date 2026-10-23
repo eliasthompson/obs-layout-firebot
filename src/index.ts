@@ -15,6 +15,7 @@ export * from '@/lib/enableScriptSettings';
 export * from '@/lib/filterSettings';
 export * from '@/lib/filterWrites';
 export * from '@/lib/findConfigProblems';
+export * from '@/lib/findSharedSourceProblems';
 export * from '@/lib/firebotScript';
 export * from '@/lib/growRegion';
 export * from '@/lib/layoutArea';
