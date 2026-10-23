@@ -107,6 +107,31 @@ const layoutMetrics = (
   return generate(adjustInsetRatios(configs, insets, generate));
 };
 
+/** Whether OBS shows an item now, from what `readObsState` read; a scene OBS could not report shows nothing. */
+const isItemShown = (state: ObsState, sceneName: string, source: string) =>
+  // Record lookups are typed as always present
+  (state.sceneItems[sceneName] as ObsSceneItem[] | undefined)?.find((item) => item.sourceName === source)
+    ?.sceneItemEnabled === true;
+
+/**
+ * Whether a scene's regions on a canvas wait for its overlays to leave first: a standby text or widget the canvas
+ * shows now that the scene does not show. Every canvas a preset lays out waits when any of them does, so the
+ * canvases move together and a source they share is faded alike.
+ *
+ * @param state - What OBS shows on the canvas now, from `readObsState`.
+ */
+export const overlaysLeave = (config: CanvasScenesConfig, sceneKey: string, state: ObsState): boolean => {
+  // Record lookups are typed as always present; the key comes from user input
+  const scene = config.scenes[sceneKey] as SceneBinding | undefined;
+  const wanted = new Set([
+    ...(scene?.standby?.text && config.standby ? [scene.standby.text] : []),
+    ...(scene?.standby?.widgets ?? []).map((widget) => widget.source),
+  ]);
+  return listOverlays(config).some(
+    ({ binding }) => !wanted.has(binding.source) && isItemShown(state, binding.scene, binding.source),
+  );
+};
+
 /**
  * Plan the transition to a scene key: one move step per bound item of the participants it shows, one visibility step
  * per participant layout in the pool, and one step per standby text and widget. Each shown participant's config is
@@ -124,12 +149,15 @@ const layoutMetrics = (
  *
  * @param state - What OBS shows now, from `readObsState`. Without it, the plan assumes nothing is shown.
  * @param modifiers - Names of the modifiers switched on.
+ * @param waitForOverlays - Whether the regions wait as if overlays were leaving, because they are on another canvas
+ *   the preset lays out; see `overlaysLeave`.
  */
 export const planLayoutMoves = (
   config: CanvasScenesConfig,
   sceneKey: string,
   state: ObsState = { sceneItems: {}, borderThickness: {}, fontSizes: {} },
   modifiers: readonly string[] = [],
+  waitForOverlays = false,
 ): MoveStep[] => {
   // Record lookups are typed as always present; the key comes from user input
   const scene = config.scenes[sceneKey] as SceneBinding | undefined;
@@ -189,7 +217,7 @@ export const planLayoutMoves = (
   // Record lookups are typed as always present; a scene OBS could not report is missing
   const sceneItem = (sceneName: string, source: string) =>
     (state.sceneItems[sceneName] as ObsSceneItem[] | undefined)?.find((item) => item.sourceName === source);
-  const isShown = (sceneName: string, source: string) => sceneItem(sceneName, source)?.sceneItemEnabled === true;
+  const isShown = (sceneName: string, source: string) => isItemShown(state, sceneName, source);
 
   /**
    * Where standby text shows: at its rendered size, centered on the line, a gap past it: right of an upright line,
@@ -212,8 +240,7 @@ export const planLayoutMoves = (
       : []),
     ...(scene.standby?.widgets ?? []).map((widget) => [widget.source, widget.region] as const),
   ]);
-  const leaving = overlays.some(({ binding }) => !wanted.has(binding.source) && isShown(binding.scene, binding.source));
-  const regionDelay = leaving ? duration : 0;
+  const regionDelay = waitForOverlays || overlaysLeave(config, sceneKey, state) ? duration : 0;
 
   const step = (binding: Binding, { region, visible, size }: Target, delay = regionDelay): MoveStep => ({
     ...binding,

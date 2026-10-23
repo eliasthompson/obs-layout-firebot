@@ -322,8 +322,9 @@ the OBS canvas in `canvas`, and needs OBS 32.1 or later and Aitum Vertical 1.6.3
 canvas needs neither.
 
 - **One preset, every canvas.** A preset applies its scene on every canvas that shows it, in one frame-synced batch,
-  so the canvases move together. Scenes, modifiers, and the standby line name participants by their key in each
-  canvas's `participants`, so the same keys on every canvas let one list of scenes serve them all.
+  so the canvases move together; when standby texts or widgets leave first on any canvas, every canvas's regions wait
+  for them. Scenes, modifiers, and the standby line name participants by their key in each canvas's `participants`,
+  so the same keys on every canvas let one list of scenes serve them all.
 - **A scene can change per canvas.** A scene's `canvases` entry for a canvas replaces its `participants` there, adds
   `options`, or, for a standby scene, lays its own `standby` text, widgets, or line over the scene's, since each canvas
   has its own text sources and widget regions; `false` leaves that canvas as it is when the preset runs. A canvas

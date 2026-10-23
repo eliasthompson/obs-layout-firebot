@@ -131,6 +131,56 @@ describe('runLayout', () => {
     expect(client.callBatch).toHaveBeenLastCalledWith(summary.requests, 1);
   });
 
+  it("holds every canvas's regions back while any canvas's overlays leave, so they move together", async () => {
+    const two: ScenesConfig = {
+      canvases: {
+        a: {
+          container: 'CA',
+          participants: { L: { sources: { camera: { source: 'cam' } } } },
+          standby: { textScene: 'TA', lineLength: 540 },
+        },
+        b: {
+          container: 'CB',
+          participants: { L: { sources: { camera: { source: 'cam (b)' } } } },
+          standby: { textScene: 'TB', lineLength: 540 },
+        },
+      },
+      scenes: {
+        only: { participants: [{ layout: 'L' }] },
+        soon: { standby: { text: 'soon' }, canvases: { b: { standby: { text: 'soon (b)' } } } },
+      },
+    };
+    const items = (sceneItems: unknown[] = []) => ({
+      requestType: 'GetSceneItemList',
+      requestStatus: ok,
+      responseData: { sceneItems },
+    });
+    const { client, connect } = fakeConnect([]);
+    // Canvas a still shows its standby text; canvas b shows nothing
+    vi.mocked(client.callBatch)
+      .mockResolvedValueOnce([
+        items(),
+        items([{ sourceName: 'soon', sceneItemId: 1, sceneItemEnabled: true }]),
+        items(),
+      ])
+      .mockResolvedValueOnce([items(), items(), items()]);
+
+    const summary = await runLayout({ config: two, sceneKey: 'only', connection, connect });
+    const camOf = (canvas: number) => summary.canvases[canvas].steps.find((step) => step.kind === 'source');
+
+    expect(camOf(0)?.delay).toBe(300);
+    expect(camOf(1)?.delay).toBe(300);
+    expect(summary.canvases[1].steps).toEqual(
+      planLayoutMoves(
+        resolveCanvasConfig(two, 'b'),
+        'only',
+        { sceneItems: { CB: [], TB: [], L: [] }, borderThickness: {}, fontSizes: {} },
+        [],
+        true,
+      ),
+    );
+  });
+
   it('rejects an unknown scene key, or one no canvas shows, without connecting', async () => {
     const { connect } = fakeConnect([]);
     const hidden: ScenesConfig = {

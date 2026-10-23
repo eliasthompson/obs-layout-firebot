@@ -1,8 +1,10 @@
 import type { ObsAddressBook } from '@/lib/addressRequests';
 import type { MovePhases } from '@/lib/buildMoveRequests';
+import type { LocatedCanvas } from '@/lib/readObsCanvases';
 import type { MoveStep } from '@/types/MoveStep';
 import type { ObsBatchResult, ObsRequest } from '@/types/ObsRequest';
-import type { ObsConnection, ScenesConfig } from '@/types/ScenesConfig';
+import type { ObsState } from '@/types/ObsState';
+import type { CanvasScenesConfig, ObsConnection, ScenesConfig } from '@/types/ScenesConfig';
 
 import { REQUEST_BATCH_EXECUTION_SERIAL_FRAME } from '@/constants/obsWebSocket';
 import { addressClient, addressRequest, readAddressBook } from '@/lib/addressRequests';
@@ -10,7 +12,7 @@ import { readAitumProgramScene, switchAitumProgramScene } from '@/lib/aitumProgr
 import { buildMovePhases, joinMovePhases, mapMovePhases } from '@/lib/buildMoveRequests';
 import { connectObs, type ConnectObs, type ObsClient } from '@/lib/connectObs';
 import { listScenes } from '@/lib/listBindings';
-import { planLayoutMoves } from '@/lib/planLayoutMoves';
+import { overlaysLeave, planLayoutMoves } from '@/lib/planLayoutMoves';
 import { locateCanvas, readObsCanvases } from '@/lib/readObsCanvases';
 import { readObsState } from '@/lib/readObsState';
 import { resolveCanvas } from '@/lib/resolveCanvasConfig';
@@ -47,6 +49,17 @@ export interface RunLayoutSummary {
   durationMs: number;
 }
 
+/** A canvas a run reached, with what it shows now, or one OBS does not have, with why. */
+type ReachedCanvas =
+  | { canvas: string; skipped: string }
+  | {
+      canvas: string;
+      view: CanvasScenesConfig;
+      located: Exclude<LocatedCanvas, { kind: 'missing' }>;
+      book: ObsAddressBook | undefined;
+      state: ObsState;
+    };
+
 /** The scene on the main canvas's program, or `undefined` when OBS cannot say. */
 const readProgramScene = async (client: ObsClient) => {
   try {
@@ -63,7 +76,8 @@ const readProgramScene = async (client: ObsClient) => {
  * OBS's main one is addressed by UUID. A canvas's container is switched to program only when program shows another
  * scene, or OBS cannot say which, so a layout already on air changes without a scene transition and preview stays
  * free for other work; the main canvas through OBS, another through Aitum Vertical. The switches end the batch, so
- * their transitions start with the moves. A canvas OBS does not have is left as it is, and the summary says why.
+ * their transitions start with the moves. A canvas OBS does not have is left as it is, and the summary says why. When
+ * overlays leave first on any canvas, every canvas's regions wait for them, so the canvases keep moving together.
  */
 export const runLayout = async ({
   config,
@@ -99,20 +113,30 @@ export const runLayout = async ({
     const phases: MovePhases[] = [];
     const switches: ObsRequest[] = [];
 
+    // What every canvas shows now, first, since one canvas's leaving overlays hold back every canvas's regions
+    const reached: ReachedCanvas[] = [];
     for (const { canvas, config: view } of shown) {
       const located = locateCanvas(config.canvases[canvas].canvas, obsCanvases);
       if (located.kind === 'missing') {
-        runs.push({ canvas, steps: [], skipped: located.problem });
+        reached.push({ canvas, skipped: located.problem });
         continue;
       }
       const book =
         located.kind === 'other' ? await readAddressBook(client, located.canvas.uuid, listScenes(view)) : undefined;
-      const steps = planLayoutMoves(
-        view,
-        sceneKey,
-        await readObsState(book ? addressClient(client, book) : client, view),
-        modifiers,
-      );
+      const state = await readObsState(book ? addressClient(client, book) : client, view);
+      reached.push({ canvas, view, located, book, state });
+    }
+    const waitForOverlays = reached.some(
+      (entry) => !('skipped' in entry) && overlaysLeave(entry.view, sceneKey, entry.state),
+    );
+
+    for (const entry of reached) {
+      if ('skipped' in entry) {
+        runs.push({ canvas: entry.canvas, steps: [], skipped: entry.skipped });
+        continue;
+      }
+      const { canvas, view, located, book, state } = entry;
+      const steps = planLayoutMoves(view, sceneKey, state, modifiers, waitForOverlays);
       phases.push(
         book
           ? mapMovePhases(buildMovePhases(steps), (request) => addressRequest(request, book))

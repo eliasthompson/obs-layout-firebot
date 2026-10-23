@@ -5,7 +5,7 @@ import type { ObsState } from '@/types/ObsState';
 import type { CanvasScenesConfig } from '@/types/ScenesConfig';
 
 import { growRegion, shrinkRegion } from '@/lib/growRegion';
-import { planLayoutMoves } from '@/lib/planLayoutMoves';
+import { overlaysLeave, planLayoutMoves } from '@/lib/planLayoutMoves';
 
 const neverRegion = { x: -1, y: -1, width: -1, height: -1 };
 /** A canvas with no margins, padding, or borders, so a 16:9 main region fills it and leaves no side room */
@@ -750,6 +750,19 @@ describe('planLayoutMoves standby', () => {
     expect(planLayoutMoves(standby, '16:9', fromCamera).some((step) => step.handoff)).toBe(false);
     expect(planLayoutMoves(noCameraBorder, 'camera', fromSoon).some((step) => step.handoff)).toBe(false);
     expect(planLayoutMoves(standby, 'camera', stateOf({}, collapsed)).some((step) => step.handoff)).toBe(false);
+  });
+
+  it('tells whether overlays leave first, and holds the regions back when another canvas says they do', () => {
+    const fromSoon = stateOf({ '[Widget] Standby Text': { soonText: true } });
+
+    expect(overlaysLeave(standby, '16:9', fromSoon)).toBe(true);
+    expect(overlaysLeave(standby, 'soon', fromSoon)).toBe(false);
+    expect(overlaysLeave(standby, '16:9', stateOf({}))).toBe(false);
+    expect(overlaysLeave({ ...standby, standby: undefined }, '16:9', fromSoon)).toBe(false);
+    expect(overlaysLeave(standby, 'ghost', fromSoon)).toBe(true);
+    // Nothing leaves on this canvas, but another canvas of the preset waits, so this one does too
+    expect(bySource(planLayoutMoves(standby, '16:9', stateOf({}))).main.delay).toBe(0);
+    expect(bySource(planLayoutMoves(standby, '16:9', stateOf({}), [], true)).main.delay).toBe(300);
   });
 
   it('rejects a standby scene without standby settings', () => {
