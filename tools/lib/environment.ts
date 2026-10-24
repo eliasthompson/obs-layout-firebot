@@ -50,7 +50,9 @@ export const packageRoot = () => {
 /**
  * Load a config file: TypeScript or JavaScript through its default export, JSON as is. jiti compiles the module, so a
  * `.ts` config with `export default` loads whatever the `type` of the user's package.json, which Node's own type
- * stripping does not: it reads `.ts` in a CommonJS package as CommonJS.
+ * stripping does not: it reads `.ts` in a CommonJS package as CommonJS. Its imports resolve through the `paths` of the
+ * tsconfig.json nearest each importing file, as TypeScript resolves them, so a config can import through the
+ * project's path aliases; an import no alias matches, such as a relative one, resolves as usual.
  */
 export const loadConfig = async (path: string): Promise<ScenesConfig> => {
   const absolute = resolve(path);
@@ -60,7 +62,8 @@ export const loadConfig = async (path: string): Promise<ScenesConfig> => {
   const config: unknown =
     extname(absolute) === '.json'
       ? JSON.parse(readFileSync(absolute, 'utf8'))
-      : await createJiti(import.meta.url).import(absolute, { default: true });
+      : // jiti looks for the tsconfig from its parent file, so the search starts at the config, not this package
+        await createJiti(absolute, { tsconfigPaths: true }).import(absolute, { default: true });
   assertConfig(config);
   return config;
 };

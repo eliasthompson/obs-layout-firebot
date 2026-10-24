@@ -118,8 +118,9 @@ and a new build need a Firebot restart to take effect.
 ## Config
 
 `config/scenes.ts` is the master config. It is a TypeScript module whose default export `satisfies ScenesConfig`, so
-your editor completes and checks every field as you type, and you can add comments or compute repetitive parts. This
-is the complete example; copy it and bind your own scene and source names:
+your editor completes and checks every field as you type, and you can add comments or compute repetitive parts. It
+can import from the rest of your project, by relative path or through your tsconfig.json's `paths` aliases, which the
+CLI resolves as TypeScript does. This is the complete example; copy it and bind your own scene and source names:
 
 ```ts
 import type { ParticipantPoolEntry, ScenesConfig } from '@eliasthompson/obs-layout-firebot';

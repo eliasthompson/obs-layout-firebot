@@ -58,8 +58,10 @@ Before finishing a change, run typecheck, lint, format check, test coverage, and
 - Configs are TypeScript modules whose default export `satisfies ScenesConfig`, with a type-only import so they need
   nothing from the package at runtime. Keep the README example complete and in step with `ScenesConfig`; it is the
   only example. The CLI loads them with jiti, not Node's type stripping, which reads `.ts` in a
-  CommonJS package as CommonJS and fails on `export default`. `.js` and `.json` configs load too. A config is stored
-  in a Firebot variable, so it must stay plain JSON data.
+  CommonJS package as CommonJS and fails on `export default`. jiti's `tsconfigPaths` is on, with the search starting
+  at the config, so a config's imports resolve through the project's tsconfig `paths` aliases as TypeScript resolves
+  them. `.js` and `.json` configs load too. A config is stored in a Firebot variable, so it must evaluate to plain JSON
+  data.
 - Tool settings resolve as command-line option, then environment variable, then the config's `firebot` / `obs`
   entries, then the platform default. Add new ones to `tools/lib/environment.ts`, `.env.example`, and the README.
 - The tools run on Windows, macOS, and Linux. Anything platform-specific goes through `process.platform` with a case
