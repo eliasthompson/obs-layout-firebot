@@ -1,6 +1,6 @@
 import type { LayoutConfig, LayoutMetric, LayoutOptions } from '@eliasthompson/obs-layout-generator';
 
-import type { ObsAlignment } from '@/constants/obsAlignment';
+import type { ObsAlignment, ObsBoundsType } from '@/constants/obsAlignment';
 import type { Rect } from '@/types/Rect';
 
 export type LayoutRegionName = keyof LayoutMetric;
@@ -19,6 +19,18 @@ export interface RegionSettings {
    */
   boundsAlignment?: ObsAlignment;
   /**
+   * How the source fills its bounds, as OBS's transform dialog names it, such as `scale to outer bounds` for a 16:9
+   * camera that covers a square region. The item keeps the type it has when omitted, and gets `stretch to bounds` when
+   * it has none. `obs:deploy` applies it to the item, so it layers over the config and the pool entry, not per scene.
+   */
+  boundsType?: ObsBoundsType;
+  /**
+   * Whether the item is cropped to its bounding box, as OBS's transform dialog's "Crop to Bounding Box", so a source
+   * scaled to outer bounds does not spill past its region. Left alone when omitted. Needs OBS 30.2 or later.
+   * `obs:deploy` applies it to the item, so it layers over the config and the pool entry, not per scene.
+   */
+  cropToBounds?: boolean;
+  /**
    * Text sources only. With either font size set, the font is set on every move to the largest size whose line fits
    * the source's height after the inset, measured from how tall the source renders at its current size. The font
    * stays at this size while it fits, and only sizes down when the region is too short for it.
@@ -31,8 +43,11 @@ export interface RegionSettings {
 /** Region settings by region name. */
 export type RegionSettingsMap = Partial<Record<LayoutRegionName, RegionSettings>>;
 
-/** What a scene may change per region: everything but the bounds alignment, which is set up once per item. */
-export type SceneRegionSettingsMap = Partial<Record<LayoutRegionName, Omit<RegionSettings, 'boundsAlignment'>>>;
+/** The region settings `obs:deploy` sets up once per item, which a scene cannot change. */
+export type ItemRegionSetting = 'boundsAlignment' | 'boundsType' | 'cropToBounds';
+
+/** What a scene may change per region: everything but the bounds settings, which are set up once per item. */
+export type SceneRegionSettingsMap = Partial<Record<LayoutRegionName, Omit<RegionSettings, ItemRegionSetting>>>;
 
 /** A region's OBS items. */
 export interface SourceBinding {

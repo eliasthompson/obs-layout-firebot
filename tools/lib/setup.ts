@@ -1,5 +1,6 @@
 // The OBS setup `obs:deploy` runs over the websocket. For every bound item it creates, disabled, the filters the
-// script drives, and gives region items a bounds type a rectangle can size. Borders render at native size (no
+// script drives, and gives region items a bounds type a rectangle can size, the config's when it sets one, along with
+// the bounds alignment and crop to bounds it sets. Borders render at native size (no
 // bounds) and get Move Value filters for their own width and height, plus, with a `borderColor` config, a Move Value
 // filter that fades their color filter's setting. Every toggled source but standby text gets an Opacity color filter
 // plus the Move Value filter that animates it, and the standby text scene is cropped at the line's middle. Move
@@ -48,6 +49,8 @@ interface Transform {
   boundsType: string;
   alignment: number;
   boundsAlignment: number;
+  /** Missing before obs-websocket 5.5 (OBS 30.2). */
+  cropToBounds?: boolean;
   width: number;
   height: number;
 }
@@ -139,7 +142,7 @@ export const runSetup = async (client: ObsClient, config: CanvasScenesConfig, { 
     }
   }
 
-  for (const { scene, source, kind, boundsAlignment } of bindings) {
+  for (const { scene, source, kind, boundsAlignment, boundsType: configBoundsType, cropToBounds } of bindings) {
     const item = itemsByScene.get(scene)?.find((candidate) => candidate.sourceName === source);
     if (!item) {
       console.log(`SKIP    ${label}${scene} has no item "${source}"`);
@@ -151,20 +154,21 @@ export const runSetup = async (client: ObsClient, config: CanvasScenesConfig, { 
         await client.call('GetSceneItemTransform', { sceneName: scene, sceneItemId: item.sceneItemId })
       ).sceneItemTransform as Transform;
       // Borders are sized through their own width/height; standby text always covers its bounds, which the script
-      // relies on to hide it; other items need bounds and keep a type they already have. Positions are top-left
-      // anchored; the alignment inside the bounds is only set when the config asks, or for standby text.
+      // relies on to hide it; other items need bounds, of the type the config sets, else one they already have.
+      // Positions are top-left anchored; the alignment inside the bounds and the crop to them are only set when the
+      // config asks, or for standby text.
       const boundsType =
         kind === 'border'
           ? 'OBS_BOUNDS_NONE'
           : kind === 'text'
             ? STANDBY_TEXT_BOUNDS_TYPE
-            : transform.boundsType === 'OBS_BOUNDS_NONE'
-              ? 'OBS_BOUNDS_STRETCH'
-              : transform.boundsType;
+            : (configBoundsType ??
+              (transform.boundsType === 'OBS_BOUNDS_NONE' ? 'OBS_BOUNDS_STRETCH' : transform.boundsType));
       const wanted: Partial<Transform> = {
         boundsType,
         alignment: 5,
         ...(boundsAlignment === undefined ? {} : { boundsAlignment }),
+        ...(cropToBounds === undefined ? {} : { cropToBounds }),
       };
       const transformChanges = Object.entries(wanted).filter(
         ([key, value]) => transform[key as keyof Transform] !== value,

@@ -23,7 +23,8 @@ const SETUP_HINT = 'run `obs-layout-firebot obs:deploy`';
 
 /**
  * Everything in a canvas's config that would make a preset fail or misbehave, checked against what OBS has on that
- * canvas: missing scenes, items, and filters are errors; a text option on a source that is not text is a warning.
+ * canvas: missing scenes, items, and filters, and items whose bounds differ from the config's, are errors; a text
+ * option on a source that is not text is a warning.
  * `findSceneProblems` checks the scenes and modifiers, which every canvas shares.
  */
 export const findConfigProblems = (config: CanvasScenesConfig, inventory: ObsInventory): ConfigProblem[] => {
@@ -130,6 +131,27 @@ export const findConfigProblems = (config: CanvasScenesConfig, inventory: ObsInv
       .map(([on, filterName]) => `"${filterName}" on "${on}"`);
   });
   if (missingFilters.length) error(`missing filters, ${SETUP_HINT}: ${missingFilters.join(', ')}`);
+
+  // Setup applies the bounds settings the config sets, so an item that differs has not been set up since they changed
+  const hasBounds = (scene: string, source: string) =>
+    scene in inventory.itemBounds && source in inventory.itemBounds[scene];
+  const staleBounds = bindings.flatMap(({ scene, source, boundsType, cropToBounds }) => {
+    if (!hasBounds(scene, source)) return [];
+    const bounds = inventory.itemBounds[scene][source];
+    if (cropToBounds !== undefined && bounds.cropToBounds === undefined) {
+      error(`"${source}" in "${scene}" sets cropToBounds, which needs OBS 30.2 or later`);
+    }
+    const differences = [
+      ...(boundsType !== undefined && bounds.boundsType !== boundsType
+        ? [`${bounds.boundsType}, not ${boundsType}`]
+        : []),
+      ...(cropToBounds !== undefined && bounds.cropToBounds !== undefined && bounds.cropToBounds !== cropToBounds
+        ? [cropToBounds ? 'not cropped to bounds' : 'cropped to bounds']
+        : []),
+    ];
+    return differences.length ? [`"${source}" in "${scene}" (${differences.join(', ')})`] : [];
+  });
+  if (staleBounds.length) error(`item bounds differ from the config, ${SETUP_HINT}: ${staleBounds.join(', ')}`);
 
   return problems;
 };

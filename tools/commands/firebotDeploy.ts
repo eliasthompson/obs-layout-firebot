@@ -10,7 +10,7 @@
 import { parseArgs } from 'node:util';
 
 import type { ObsClient } from '@/lib/connectObs';
-import type { ConfigProblem, ObsInventory } from '@/types/ObsInventory';
+import type { ConfigProblem, ItemBounds, ObsInventory } from '@/types/ObsInventory';
 import type { CanvasScenesConfig, ScenesConfig } from '@/types/ScenesConfig';
 
 import { createPresetEffectLists } from '@/lib/createPresetEffectList';
@@ -39,15 +39,21 @@ const MANUAL_RESTART_WAIT_MS = 600_000;
 
 /** Read back every scene, item, and filter a canvas's config binds, to check it against. */
 const readObsInventory = async (client: ObsClient, config: CanvasScenesConfig): Promise<ObsInventory> => {
-  const inventory: ObsInventory = { sceneItems: {}, filters: {}, inputKinds: {} };
+  const inventory: ObsInventory = { sceneItems: {}, filters: {}, inputKinds: {}, itemBounds: {} };
   const { scenes } = (await client.call('GetSceneList')) as { scenes: { sceneName: string }[] };
   const sceneNames = new Set(scenes.map((scene) => scene.sceneName));
   for (const scene of listScenes(config)) {
     if (!sceneNames.has(scene)) continue;
     const { sceneItems } = (await client.call('GetSceneItemList', { sceneName: scene })) as {
-      sceneItems: { sourceName: string; inputKind?: string }[];
+      sceneItems: { sourceName: string; inputKind?: string; sceneItemTransform: ItemBounds }[];
     };
     inventory.sceneItems[scene] = sceneItems.map((item) => item.sourceName);
+    inventory.itemBounds[scene] = Object.fromEntries(
+      sceneItems.map(({ sourceName, sceneItemTransform: { boundsType, cropToBounds } }) => [
+        sourceName,
+        { boundsType, ...(cropToBounds === undefined ? {} : { cropToBounds }) },
+      ]),
+    );
     for (const item of sceneItems) {
       if (item.inputKind !== undefined) inventory.inputKinds[item.sourceName] = item.inputKind;
     }

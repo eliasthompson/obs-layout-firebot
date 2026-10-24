@@ -23,6 +23,9 @@ A [canvas](#canvases) other than OBS's main one, such as the vertical canvas of 
 | OBS Studio     | 32.1    | Ships obs-websocket 5.7.2, whose scene and filter requests take a canvas, and which lists the canvases.                                  |
 | Aitum Vertical | 1.6.3   | Puts its vertical canvas on OBS's own canvases (1.6.0) and switches that canvas's program scene; 1.6.3 fixed editing transforms on 32.1. |
 
+A config that sets a region's `cropToBounds` needs OBS 30.2 or later, which ships obs-websocket 5.5.1, the first to
+report and set a scene item's crop to its bounds.
+
 The tools run on Windows, macOS, and Linux.
 
 ## How it works
@@ -87,7 +90,8 @@ every machine makes the same presets and there is nothing else to keep. Keep the
 - A **container** scene (for example `[Scene] Content`) that holds one nested **layout** scene per participant (for
   example `[Layout] Person 1`), each filling the canvas.
 - In each layout scene, one item per region: a group or nested scene for the content, one for the camera, and so on.
-  Items that a rectangle sizes keep whatever bounds type they have; items with no bounds type get Stretch.
+  Items that a rectangle sizes get the bounds type their region's `boundsType` sets; without one they keep whatever
+  bounds type they have, and items with no bounds type get Stretch.
 - Optionally one color source per region as its **border**, with the stroke and shadow filters of your choice. The
   color source is sized to the region's border box, the region grown by `regionBorder`, so `regionBorder` is the
   visible border. `borderPadding` is how far those filters extend the source past it, such as a shadow's size: the
@@ -188,6 +192,7 @@ export default {
   config: { camera: { mainAspectRatio: '4:3' } },
   // How every participant's sources sit in their regions, under the canvas's, each participant's own, and the scenes'
   regions: {
+    camera: { boundsType: 'scale to outer bounds', cropToBounds: true },
     info: { inset: 12, boundsAlignment: 'top center' },
     name: { inset: 12, fontSizeMin: 24, fontSizeMax: 48 },
   },
@@ -232,18 +237,18 @@ export default {
 } satisfies ScenesConfig;
 ```
 
-| Field           | Meaning                                                                                                                                                                |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `canvases`      | The OBS canvases to lay out, by a key of your choosing, each with the fields below; see [Canvases](#canvases).                                                         |
-| `borderPadding` | Pixels the border sources' filters add outside the border on every side. Default `0`.                                                                                  |
-| `borderColor`   | The filter on each border that carries its color, for recoloring; see [Border colors](#border-colors).                                                                 |
-| `duration`      | Move duration in milliseconds. Default `300`.                                                                                                                          |
-| `config`        | The `LayoutConfig` every participant starts from; see [Layers and modifiers](#layers-and-modifiers).                                                                   |
-| `regions`       | Region settings every participant starts from: `inset`, `boundsAlignment`, `fontSizeMax`, `fontSizeMin` per region; see [Layers and modifiers](#layers-and-modifiers). |
-| `scenes`        | Compositions by scene key: the participants shown, in layout order, each with the `config` the composition changes, and the modifiers the scene forces.                |
-| `modifiers`     | `LayoutConfig`s presets switch on and off over any scene; see [Layers and modifiers](#layers-and-modifiers).                                                           |
-| `obs`           | Optional. `url` and `password` are used over Firebot's OBS integration settings; see [Machine settings].                                                               |
-| `firebot`       | Optional. Where the tools find Firebot; see [Machine settings].                                                                                                        |
+| Field           | Meaning                                                                                                                                                                                              |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `canvases`      | The OBS canvases to lay out, by a key of your choosing, each with the fields below; see [Canvases](#canvases).                                                                                       |
+| `borderPadding` | Pixels the border sources' filters add outside the border on every side. Default `0`.                                                                                                                |
+| `borderColor`   | The filter on each border that carries its color, for recoloring; see [Border colors](#border-colors).                                                                                               |
+| `duration`      | Move duration in milliseconds. Default `300`.                                                                                                                                                        |
+| `config`        | The `LayoutConfig` every participant starts from; see [Layers and modifiers](#layers-and-modifiers).                                                                                                 |
+| `regions`       | Region settings every participant starts from: `inset`, `boundsAlignment`, `boundsType`, `cropToBounds`, `fontSizeMax`, `fontSizeMin` per region; see [Layers and modifiers](#layers-and-modifiers). |
+| `scenes`        | Compositions by scene key: the participants shown, in layout order, each with the `config` the composition changes, and the modifiers the scene forces.                                              |
+| `modifiers`     | `LayoutConfig`s presets switch on and off over any scene; see [Layers and modifiers](#layers-and-modifiers).                                                                                         |
+| `obs`           | Optional. `url` and `password` are used over Firebot's OBS integration settings; see [Machine settings].                                                                                             |
+| `firebot`       | Optional. Where the tools find Firebot; see [Machine settings].                                                                                                                                      |
 
 Each canvas takes:
 
@@ -268,7 +273,10 @@ optional
 that should not touch the frame; a ratio declared for an inset region holds for the area inside the inset, so a
 `250:49` info strip with a 12 px inset shows 366x72 of content inside a 390x96 region), an optional `boundsAlignment`
 (where the source sits inside its bounds when it does not fill them, named as in OBS's transform dialog, such as
-`top center`), which `obs:deploy` applies, and for text sources an optional `fontSizeMax` and `fontSizeMin`. With
+`top center`), an optional `boundsType` (how the source fills its bounds, named as in the same dialog, such as
+`scale to outer bounds` for a 16:9 camera covering a square region; the item keeps its own type when this is left
+out), and an optional `cropToBounds` (OBS's "Crop to Bounding Box", so a source scaled to outer bounds does not spill
+past its region; needs OBS 30.2 or later), all three of which `obs:deploy` applies to the item, and for text sources an optional `fontSizeMax` and `fontSizeMin`. With
 either set, the font is set on every move to the largest size whose line fits the source's height after the inset:
 it stays at `fontSizeMax` while that fits and sizes down to `fontSizeMin` when the region is too short. How tall a
 line renders per pixel of font size is measured from the source itself, its rendered height at its current font size,
@@ -302,8 +310,10 @@ can change one field of a region without restating the rest, and `null` on any l
 5. every modifier in effect, in the order `modifiers` lists them.
 
 Region settings layer the same way, field by field per region: the config's `regions`, then the canvas's, then the
-pool entry's, then the scene participant's. The bounds alignment is the exception: `obs:deploy` sets it on the item
-once, so it layers over the config, the canvas, and the pool entry only.
+pool entry's, then the scene participant's. The bounds settings (`boundsAlignment`, `boundsType`, `cropToBounds`) are
+the exception: `obs:deploy` sets them on the item once, so they layer over the config, the canvas, and the pool entry
+only. Setting them in the config rather than by hand in OBS keeps every participant's items alike, a new
+participant's included.
 
 Modifiers are the switches: named layout configs that presets switch on and off at runtime, over whatever scene is
 up. A region config in any layer switches the region on, so a region that only a modifier should show, such as a
@@ -539,7 +549,8 @@ other programs or older tools made, and every other file stay as they are. Nothi
 
 1. It checks the scenes and modifiers, then reads every bound scene, item, and filter back from OBS on every canvas,
    and refuses to deploy when something is missing, so a typo in a source name is caught before a preset ever fails.
-   Missing filters point at `obs:deploy`. A canvas OBS does not have is reported and skipped. It waits for OBS to be
+   Missing filters, and items whose bounds differ from the config's `boundsType` or `cropToBounds`, point at
+   `obs:deploy`. A canvas OBS does not have is reported and skipped. It waits for OBS to be
    started when it is not running; pass `--skip-obs` to check the scenes and modifiers alone.
 2. It stores the config in the `layoutScenes` variable (or `firebot.variable`). The next preset run uses it; nothing
    needs a restart.

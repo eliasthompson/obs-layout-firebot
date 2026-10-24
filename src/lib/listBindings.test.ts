@@ -68,6 +68,31 @@ describe('listBindings', () => {
     ]);
   });
 
+  it("takes the bounds type and crop to bounds from the config's regions under the participant's own", () => {
+    const withBounds: CanvasScenesConfig = {
+      ...config,
+      regions: { camera: { boundsType: 'scale to outer bounds', cropToBounds: true } },
+      participants: {
+        '[Layout] Person 1': {
+          ...config.participants['[Layout] Person 1'],
+          regions: { camera: { cropToBounds: false }, info: { boundsType: 'scale to width of bounds' } },
+        },
+      },
+    };
+
+    expect(listBindings(withBounds).filter(({ kind }) => kind === 'source')).toEqual([
+      { scene: '[Layout] Person 1', source: '[Group] Content 1', kind: 'source' },
+      {
+        scene: '[Layout] Person 1',
+        source: '[Group] Camera 1',
+        kind: 'source',
+        boundsType: 'OBS_BOUNDS_SCALE_OUTER',
+        cropToBounds: false,
+      },
+      { scene: '[Layout] Person 1', source: '[Group] Info 1', kind: 'source', boundsType: 'OBS_BOUNDS_SCALE_TO_WIDTH' },
+    ]);
+  });
+
   it('lists nothing for an empty pool', () => {
     expect(listBindings({ ...config, participants: {} })).toEqual([]);
   });

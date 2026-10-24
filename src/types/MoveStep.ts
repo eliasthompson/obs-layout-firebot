@@ -11,6 +11,10 @@ export interface Binding {
   kind: BindingKind;
   /** OBS alignment flags for the item's bounds alignment, when the config sets one. */
   boundsAlignment?: number;
+  /** OBS bounds type (OBS_BOUNDS_*) for the item, when the config sets one. */
+  boundsType?: string;
+  /** Whether the item is cropped to its bounds, when the config says. */
+  cropToBounds?: boolean;
 }
 
 export interface SourceSize {

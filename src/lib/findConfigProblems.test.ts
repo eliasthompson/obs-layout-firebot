@@ -29,6 +29,13 @@ const inventory: ObsInventory = {
     Name: ['Opacity', 'Move: Opacity'],
   },
   inputKinds: { CamBorder: 'color_source_v3', Name: 'text_gdiplus_v3' },
+  itemBounds: {
+    P1: {
+      Cam: { boundsType: 'OBS_BOUNDS_STRETCH', cropToBounds: false },
+      CamBorder: { boundsType: 'OBS_BOUNDS_NONE', cropToBounds: false },
+      Name: { boundsType: 'OBS_BOUNDS_MAX_ONLY', cropToBounds: false },
+    },
+  },
 };
 
 const messages = (problems: ReturnType<typeof findConfigProblems>) => problems.map((problem) => problem.message);
@@ -73,6 +80,57 @@ describe('findConfigProblems', () => {
           'missing filters, run `obs-layout-firebot obs:deploy`: "Opacity" on "P1", "Move: Opacity" on "P1", "Move: CamBorder" on "P1", "Opacity" on "CamBorder", "Move: Opacity" on "CamBorder", "Move: Width" on "CamBorder", "Move: Height" on "CamBorder"',
       },
     ]);
+  });
+
+  describe('item bounds', () => {
+    const bounded: CanvasScenesConfig = {
+      ...config,
+      regions: { camera: { boundsType: 'scale to outer bounds', cropToBounds: true } },
+    };
+
+    it('lists items whose bounds differ from the config in one error with the setup hint', () => {
+      expect(findConfigProblems(bounded, inventory)).toEqual([
+        {
+          severity: 'error',
+          message:
+            'item bounds differ from the config, run `obs-layout-firebot obs:deploy`: "Cam" in "P1" (OBS_BOUNDS_STRETCH, not OBS_BOUNDS_SCALE_OUTER, not cropped to bounds)',
+        },
+      ]);
+      expect(
+        messages(
+          findConfigProblems(
+            { ...config, regions: { camera: { cropToBounds: false } } },
+            { ...inventory, itemBounds: { P1: { Cam: { boundsType: 'OBS_BOUNDS_STRETCH', cropToBounds: true } } } },
+          ),
+        ),
+      ).toEqual([
+        'item bounds differ from the config, run `obs-layout-firebot obs:deploy`: "Cam" in "P1" (cropped to bounds)',
+      ]);
+    });
+
+    it('finds nothing wrong once setup has applied them, and skips items it has no bounds for', () => {
+      expect(
+        findConfigProblems(bounded, {
+          ...inventory,
+          itemBounds: {
+            P1: { ...inventory.itemBounds.P1, Cam: { boundsType: 'OBS_BOUNDS_SCALE_OUTER', cropToBounds: true } },
+          },
+        }),
+      ).toEqual([]);
+      expect(findConfigProblems(bounded, { ...inventory, itemBounds: {} })).toEqual([]);
+      expect(findConfigProblems(bounded, { ...inventory, itemBounds: { P1: {} } })).toEqual([]);
+    });
+
+    it('reports a crop to bounds that OBS does not report, which needs OBS 30.2', () => {
+      expect(
+        messages(
+          findConfigProblems(
+            { ...config, regions: { camera: { cropToBounds: true } } },
+            { ...inventory, itemBounds: { P1: { Cam: { boundsType: 'OBS_BOUNDS_STRETCH' } } } },
+          ),
+        ),
+      ).toEqual(['"Cam" in "P1" sets cropToBounds, which needs OBS 30.2 or later']);
+    });
   });
 
   describe('border color', () => {
