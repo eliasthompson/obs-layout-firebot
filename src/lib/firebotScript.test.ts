@@ -91,6 +91,35 @@ describe('createRun', () => {
     );
   });
 
+  it('counts the items it toggled in the summary', async () => {
+    const toggled = {
+      ...config,
+      canvases: { main: { ...config.canvases.main, items: { Voice: { visible: false } } } },
+    };
+    const { connect } = fakeConnect((count) =>
+      count === 3
+        ? [
+            {
+              requestType: 'GetSceneItemList',
+              requestStatus: { result: true, code: 100 },
+              responseData: { sceneItems: [] },
+            },
+            {
+              requestType: 'GetSceneItemList',
+              requestStatus: { result: true, code: 100 },
+              responseData: { sceneItems: [{ sourceName: 'Voice', sceneItemId: 8, sceneItemEnabled: true }] },
+            },
+            { requestType: 'GetGroupSceneItemList', requestStatus: { result: false, code: 602 } },
+          ]
+        : allOk(count),
+    );
+    const run = createRun({ profileDir: '/profile', connect, readIntegrations: () => integrations });
+    const { runRequest, logs } = request({ sceneKey: 'only' }, toggled);
+
+    await expect(run(runRequest)).resolves.toEqual({ success: true });
+    expect(logs[0]).toMatch(/^info OBS Layout: scene "only", 3 items shown, 0 hidden, 1 toggled, \d+ requests/);
+  });
+
   it('switches a modifier on, applies the remembered scene with it, and keeps it for the next scene', async () => {
     const { connect } = fakeConnect(allOk);
     const run = createRun({ profileDir: '/profile', connect, readIntegrations: () => integrations });

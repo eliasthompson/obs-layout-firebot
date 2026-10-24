@@ -1,6 +1,7 @@
 import type { ObsAddressBook } from '@/lib/addressRequests';
 import type { MovePhases } from '@/lib/buildMoveRequests';
 import type { LocatedCanvas } from '@/lib/readObsCanvases';
+import type { ItemToggle } from '@/types/ItemToggle';
 import type { MoveStep } from '@/types/MoveStep';
 import type { ObsBatchResult, ObsRequest } from '@/types/ObsRequest';
 import type { ObsState } from '@/types/ObsState';
@@ -12,6 +13,7 @@ import { readAitumProgramScene, switchAitumProgramScene } from '@/lib/aitumProgr
 import { buildMovePhases, joinMovePhases, mapMovePhases } from '@/lib/buildMoveRequests';
 import { connectObs, type ConnectObs, type ObsClient } from '@/lib/connectObs';
 import { listScenes } from '@/lib/listBindings';
+import { planItemToggles } from '@/lib/planItemToggles';
 import { overlaysLeave, planLayoutMoves } from '@/lib/planLayoutMoves';
 import { locateCanvas, readObsCanvases } from '@/lib/readObsCanvases';
 import { readObsState } from '@/lib/readObsState';
@@ -32,7 +34,9 @@ export interface CanvasRun {
   /** The canvas, by its key in `canvases`. */
   canvas: string;
   steps: MoveStep[];
-  /** Why the canvas was left as it is, when OBS does not have it; its steps are then empty. */
+  /** The items it showed or hid. */
+  toggles: ItemToggle[];
+  /** Why the canvas was left as it is, when OBS does not have it; its steps and toggles are then empty. */
   skipped?: string;
   /** How its requests reached it, for a canvas other than OBS's main one. */
   book?: ObsAddressBook;
@@ -43,6 +47,8 @@ export interface RunLayoutSummary {
   canvases: CanvasRun[];
   /** Every canvas's steps. */
   steps: MoveStep[];
+  /** Every canvas's toggles. */
+  toggles: ItemToggle[];
   requests: ObsRequest[];
   results: ObsBatchResult[];
   failed: ObsBatchResult[];
@@ -132,15 +138,16 @@ export const runLayout = async ({
 
     for (const entry of reached) {
       if ('skipped' in entry) {
-        runs.push({ canvas: entry.canvas, steps: [], skipped: entry.skipped });
+        runs.push({ canvas: entry.canvas, steps: [], toggles: [], skipped: entry.skipped });
         continue;
       }
       const { canvas, view, located, book, state } = entry;
       const steps = planLayoutMoves(view, sceneKey, state, modifiers, waitForOverlays);
+      const toggles = planItemToggles(view, sceneKey, state, modifiers);
       phases.push(
         book
-          ? mapMovePhases(buildMovePhases(steps), (request) => addressRequest(request, book))
-          : buildMovePhases(steps),
+          ? mapMovePhases(buildMovePhases(steps, toggles), (request) => addressRequest(request, book))
+          : buildMovePhases(steps, toggles),
       );
 
       if (located.kind === 'other') {
@@ -150,7 +157,7 @@ export const runLayout = async ({
       } else if ((await readProgramScene(client)) !== view.container) {
         switches.push({ requestType: 'SetCurrentProgramScene', requestData: { sceneName: view.container } });
       }
-      runs.push({ canvas, steps, ...(book ? { book } : {}) });
+      runs.push({ canvas, steps, toggles, ...(book ? { book } : {}) });
     }
 
     const requests = phases.length ? [...joinMovePhases(phases), ...switches] : [];
@@ -158,6 +165,7 @@ export const runLayout = async ({
     return {
       canvases: runs,
       steps: runs.flatMap((run) => run.steps),
+      toggles: runs.flatMap((run) => run.toggles),
       requests,
       results,
       failed: results.filter((result) => !result.requestStatus.result),

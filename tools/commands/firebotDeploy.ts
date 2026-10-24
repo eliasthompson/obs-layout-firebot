@@ -41,10 +41,15 @@ const MANUAL_RESTART_WAIT_MS = 600_000;
 const readObsInventory = async (client: ObsClient, config: CanvasScenesConfig): Promise<ObsInventory> => {
   const inventory: ObsInventory = { sceneItems: {}, filters: {}, inputKinds: {}, itemBounds: {} };
   const { scenes } = (await client.call('GetSceneList')) as { scenes: { sceneName: string }[] };
+  const { groups } = (await client.call('GetGroupList')) as { groups: string[] };
   const sceneNames = new Set(scenes.map((scene) => scene.sceneName));
   for (const scene of listScenes(config)) {
-    if (!sceneNames.has(scene)) continue;
-    const { sceneItems } = (await client.call('GetSceneItemList', { sceneName: scene })) as {
+    // A toggled item may sit in a group, which only GetGroupSceneItemList lists
+    const isGroup = !sceneNames.has(scene) && groups.includes(scene);
+    if (!sceneNames.has(scene) && !isGroup) continue;
+    const { sceneItems } = (await client.call(isGroup ? 'GetGroupSceneItemList' : 'GetSceneItemList', {
+      sceneName: scene,
+    })) as {
       sceneItems: { sourceName: string; inputKind?: string; sceneItemTransform: ItemBounds }[];
     };
     inventory.sceneItems[scene] = sceneItems.map((item) => item.sourceName);

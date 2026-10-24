@@ -28,7 +28,7 @@ export const resolveParticipantConfig = (
     ...modifiers.flatMap((name) => {
       const modifier = config.modifiers?.[name];
       return modifier && (!modifier.participants || modifier.participants.includes(participant.layout))
-        ? [modifier.config]
+        ? [modifier.config ?? {}]
         : [];
     }),
   ];

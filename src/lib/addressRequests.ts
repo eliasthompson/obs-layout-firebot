@@ -20,7 +20,8 @@ export interface ObsAddressBook {
 const CANVAS_REQUESTS = new Set(['CreateScene', 'GetSceneList']);
 
 /**
- * Address a request to a canvas: the scenes and sources it names by UUID, found in the address book. A scene or
+ * Address a request to a canvas: the scenes and sources it names by UUID, found in the address book, a group as the
+ * source of the item it is. A scene or
  * source the book does not know keeps its name and gets the canvas, so OBS reports it missing from that canvas. An
  * input it does not know keeps its name, since inputs are looked up on the main canvas.
  *
@@ -39,6 +40,9 @@ export const addressRequest = (request: ObsRequest, { canvasUuid, scenes, source
   if (typeof sceneName === 'string') {
     if (Object.hasOwn(scenes, sceneName)) {
       addressed.sceneUuid = scenes[sceneName];
+    } else if (Object.hasOwn(sources, sceneName)) {
+      // A group is a scene to obs-websocket, but not in the canvas's scene list: it is the source of an item
+      addressed.sceneUuid = sources[sceneName];
     } else {
       addressed.sceneName = sceneName;
       isUnknown = true;

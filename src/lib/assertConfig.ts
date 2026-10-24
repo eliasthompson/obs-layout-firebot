@@ -28,6 +28,22 @@ export const assertConfig: (config: unknown) => asserts config is ScenesConfig =
     if (isObject(canvas.standby) && 'lineHeight' in canvas.standby && !('lineLength' in canvas.standby)) {
       throw new Error(`config.canvases.${key}.standby.lineHeight is now lineLength`);
     }
+    if (canvas.items !== undefined) {
+      if (!isObject(canvas.items) || Array.isArray(canvas.items)) {
+        throw new Error(`config.canvases.${key}.items must be an object of items`);
+      }
+      for (const [itemKey, item] of Object.entries(canvas.items)) {
+        if (!isObject(item) || typeof item.visible !== 'boolean') {
+          throw new Error(`config.canvases.${key}.items["${itemKey}"].visible must be true or false`);
+        }
+      }
+    }
+    if (
+      canvas.fadeScenes !== undefined &&
+      (!Array.isArray(canvas.fadeScenes) || !canvas.fadeScenes.every((scene) => typeof scene === 'string'))
+    ) {
+      throw new Error(`config.canvases.${key}.fadeScenes must be a list of OBS scene and group names`);
+    }
   }
   if (!isObject(config.scenes)) throw new Error('config.scenes must be an object');
 };

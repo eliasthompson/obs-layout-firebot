@@ -38,6 +38,13 @@ describe('addressRequest', () => {
     });
   });
 
+  it('addresses a group, which the scene list leaves out, by the UUID of the item it is', () => {
+    expect(
+      addressRequest({ requestType: 'SetSceneItemEnabled', requestData: { sceneName: 'Border', sceneItemId: 5 } }, book)
+        .requestData,
+    ).toEqual({ sceneUuid: 'source-border', sceneItemId: 5 });
+  });
+
   it('gives the canvas to a scene or source it does not know, and leaves an unknown input to the main canvas', () => {
     expect(
       addressRequest({ requestType: 'GetSceneItemList', requestData: { sceneName: 'Gone' } }, book).requestData,

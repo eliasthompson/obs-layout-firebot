@@ -57,8 +57,9 @@ describe('runLayout', () => {
     expect(client.callBatch).toHaveBeenCalledWith(requests, 1);
     expect(client.close).toHaveBeenCalledOnce();
     expect(summary).toEqual({
-      canvases: [{ canvas: 'main', steps }],
+      canvases: [{ canvas: 'main', steps, toggles: [] }],
       steps,
+      toggles: [],
       requests,
       results,
       failed: [],
@@ -129,6 +130,41 @@ describe('runLayout', () => {
       }),
     );
     expect(client.callBatch).toHaveBeenLastCalledWith(summary.requests, 1);
+  });
+
+  it('toggles the items the scene and the modifiers say, from what OBS shows, at the end of the batch', async () => {
+    const toggled: ScenesConfig = {
+      ...config,
+      canvases: { main: { ...config.canvases.main, items: { Voice: { visible: true }, Music: { visible: true } } } },
+      scenes: { only: { participants: [{ layout: 'L' }], items: { Voice: false } } },
+      modifiers: { Quiet: { items: { Music: false } } },
+    };
+    const { client, connect } = fakeConnect([]);
+    // The layout scene, then the container the items sit in, asked as a scene and as a group
+    vi.mocked(client.callBatch).mockResolvedValueOnce([
+      { requestType: 'GetSceneItemList', requestStatus: ok, responseData: { sceneItems: [] } },
+      {
+        requestType: 'GetSceneItemList',
+        requestStatus: ok,
+        responseData: {
+          sceneItems: [
+            { sourceName: 'Voice', sceneItemId: 8, sceneItemEnabled: true },
+            { sourceName: 'Music', sceneItemId: 16, sceneItemEnabled: true },
+          ],
+        },
+      },
+      { requestType: 'GetGroupSceneItemList', requestStatus: { result: false, code: 602 } },
+    ]);
+
+    const summary = await runLayout({ config: toggled, sceneKey: 'only', modifiers: ['Quiet'], connection, connect });
+    const toggles = [
+      { scene: 'C', source: 'Voice', sceneItemId: 8, visible: false },
+      { scene: 'C', source: 'Music', sceneItemId: 16, visible: false },
+    ];
+
+    expect(summary.toggles).toEqual(toggles);
+    expect(summary.canvases[0]?.toggles).toEqual(toggles);
+    expect(summary.requests).toEqual(buildMoveRequests(summary.steps, toggles));
   });
 
   it("holds every canvas's regions back while any canvas's overlays leave, so they move together", async () => {
@@ -306,8 +342,8 @@ describe('runLayout', () => {
         requestData: { width: 1080, height: 1920 },
       });
       expect(summary.canvases).toEqual([
-        { canvas: 'landscape', steps: landscapeSteps },
-        { canvas: 'portrait', steps: portraitSteps, book },
+        { canvas: 'landscape', steps: landscapeSteps, toggles: [] },
+        { canvas: 'portrait', steps: portraitSteps, toggles: [], book },
       ]);
       expect(summary.steps).toEqual([...landscapeSteps, ...portraitSteps]);
       expect(summary.requests).toEqual([
@@ -354,6 +390,7 @@ describe('runLayout', () => {
       expect(missing.canvases[1]).toEqual({
         canvas: 'portrait',
         steps: [],
+        toggles: [],
         skipped: 'OBS has no canvas "Aitum Vertical"; it has "Main"',
       });
       expect(missing.requests).toEqual(buildMoveRequests(missing.canvases[0].steps));

@@ -1,3 +1,4 @@
+import type { ItemToggle } from '@/types/ItemToggle';
 import type { MoveStep } from '@/types/MoveStep';
 import type { FilterWrite, ObsRequest } from '@/types/ObsRequest';
 
@@ -23,6 +24,8 @@ export interface MovePhases {
   sizes: ObsRequest[];
   /** Every other filter enabled. */
   moves: ObsRequest[];
+  /** Toggled items shown or hidden as the moves start, each fading through its own show or hide transition. */
+  toggles: ObsRequest[];
 }
 
 /**
@@ -37,8 +40,11 @@ export interface MovePhases {
  * A handoff passes the standby line to another border: the new border's opacity is set to full with the filter
  * settings, so it has settled by the time both items toggle in the same frame after the sleep, and the line never
  * blinks or doubles up.
+ *
+ * Toggled items are shown or hidden with the moves, so an item that fades with a scene, such as an audio group muted
+ * on standby screens, fades along with the layout.
  */
-export const buildMovePhases = (steps: MoveStep[]): MovePhases => {
+export const buildMovePhases = (steps: MoveStep[], toggles: readonly ItemToggle[] = []): MovePhases => {
   const writes = steps.flatMap(filterWrites);
   const setEnabled = (targets: FilterWrite[], filterEnabled: boolean): ObsRequest[] =>
     targets.map(({ sourceName, filterName }) => ({
@@ -91,6 +97,10 @@ export const buildMovePhases = (steps: MoveStep[]): MovePhases => {
       writes.filter((write) => !isSizeWrite(write)),
       true,
     ),
+    toggles: toggles.map(({ scene, sceneItemId, visible }) => ({
+      requestType: 'SetSceneItemEnabled',
+      requestData: { sceneName: scene, sceneItemId, sceneItemEnabled: visible },
+    })),
   };
 };
 
@@ -106,6 +116,7 @@ export const mapMovePhases = (phases: MovePhases, map: (request: ObsRequest) => 
   handoffs: phases.handoffs.map(map),
   sizes: phases.sizes.map(map),
   moves: phases.moves.map(map),
+  toggles: phases.toggles.map(map),
 });
 
 /**
@@ -126,13 +137,16 @@ export const joinMovePhases = (phases: MovePhases[]): ObsRequest[] => {
     ...sizes,
     ...(sizes.length ? [{ requestType: 'Sleep', requestData: { sleepFrames: SIZE_LEAD_FRAMES } }] : []),
     ...stage('moves'),
+    ...stage('toggles'),
   ];
 };
 
 /**
- * The obs-websocket requests that apply one canvas's moves, as one SERIAL_FRAME batch.
+ * The obs-websocket requests that apply one canvas's moves and toggles, as one SERIAL_FRAME batch.
  *
  * @param steps - The canvas's move steps.
+ * @param toggles - The canvas's item toggles.
  * @returns The batch.
  */
-export const buildMoveRequests = (steps: MoveStep[]): ObsRequest[] => joinMovePhases([buildMovePhases(steps)]);
+export const buildMoveRequests = (steps: MoveStep[], toggles: readonly ItemToggle[] = []): ObsRequest[] =>
+  joinMovePhases([buildMovePhases(steps, toggles)]);

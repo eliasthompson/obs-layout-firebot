@@ -84,6 +84,8 @@ export const resolveCanvas = (config: ScenesConfig, canvasKey: string): Resolved
     regions: canvasRegions,
     participants,
     standby,
+    items,
+    fadeScenes,
   } = canvases[canvasKey];
   const layoutConfig =
     sharedLayoutConfig && canvasLayoutConfig
@@ -152,6 +154,8 @@ export const resolveCanvas = (config: ScenesConfig, canvasKey: string): Resolved
       ...(regions ? { regions } : {}),
       participants: byScene,
       ...(standby ? { standby } : {}),
+      ...(items ? { items } : {}),
+      ...(fadeScenes ? { fadeScenes } : {}),
       scenes: canvasScenes,
       ...(canvasModifiers ? { modifiers: canvasModifiers } : {}),
     },

@@ -82,6 +82,31 @@ describe('findConfigProblems', () => {
     ]);
   });
 
+  it('reports toggled items whose scene or group is missing, items missing from them, and items the layout moves', () => {
+    const toggled: CanvasScenesConfig = {
+      ...config,
+      items: {
+        Voice: { visible: true },
+        Mic: { scene: 'Voice', visible: true },
+        Gone: { scene: 'Nowhere', visible: false },
+        Cam: { scene: 'P1', visible: true },
+      },
+    };
+
+    expect(
+      messages(
+        findConfigProblems(toggled, {
+          ...inventory,
+          sceneItems: { ...inventory.sceneItems, Program: ['P1', 'Voice'], Voice: [] },
+        }),
+      ),
+    ).toEqual([
+      '"Voice" has no item "Mic" (item "Mic")',
+      'item "Gone": scene or group "Nowhere" does not exist in OBS',
+      'item "Cam" is "Cam" in "P1", which the layout shows and hides itself',
+    ]);
+  });
+
   describe('item bounds', () => {
     const bounded: CanvasScenesConfig = {
       ...config,
@@ -327,6 +352,19 @@ describe('findSceneProblems', () => {
     expect(findSceneProblems(config).map((problem) => problem.message)).toEqual([
       'modifier "Keyed" names participant "P9", which no canvas has',
       'scene "solo" forces unknown modifier "Ghost"',
+    ]);
+  });
+
+  it('checks the items scenes and modifiers toggle against every canvas', () => {
+    const config: ScenesConfig = {
+      canvases: { ...canvases, landscape: { ...canvases.landscape, items: { Voice: { visible: true } } } },
+      modifiers: { Quiet: { items: { Voice: false, Music: false } } },
+      scenes: { solo: { participants: [{ layout: 'P1' }], items: { Voice: true, Alerts: false } } },
+    };
+
+    expect(findSceneProblems(config).map((problem) => problem.message)).toEqual([
+      'modifier "Quiet" toggles item "Music", which no canvas has',
+      'scene "solo" toggles item "Alerts", which no canvas has',
     ]);
   });
 });

@@ -61,6 +61,23 @@ describe('resolveCanvas', () => {
     });
   });
 
+  it('gives a canvas its toggled items and fade scenes, and leaves them out of a canvas that has none', () => {
+    const withItems: ScenesConfig = {
+      ...config,
+      canvases: {
+        ...config.canvases,
+        landscape: { ...config.canvases.landscape, items: { Voice: { visible: true } }, fadeScenes: ['Lists'] },
+      },
+    };
+
+    expect(resolveCanvasConfig(withItems, 'landscape')).toMatchObject({
+      items: { Voice: { visible: true } },
+      fadeScenes: ['Lists'],
+    });
+    expect(resolveCanvasConfig(withItems, 'portrait')).not.toHaveProperty('items');
+    expect(resolveCanvasConfig(withItems, 'portrait')).not.toHaveProperty('fadeScenes');
+  });
+
   it("merges the canvas's config and regions over the config's, and applies the scenes' changes for the canvas", () => {
     const portrait = resolveCanvasConfig(config, 'portrait');
 

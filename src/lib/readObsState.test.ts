@@ -186,4 +186,55 @@ describe('readObsState', () => {
       0,
     );
   });
+
+  it('reads the scenes and groups of the toggled items, asking for each both ways, and the borders after them', async () => {
+    const withItems: CanvasScenesConfig = {
+      ...config,
+      items: {
+        Voice: { visible: true },
+        Mic: { scene: 'Voice', visible: true },
+        Cam: { source: 'cam', scene: 'L1', visible: true },
+        Gone: { scene: 'Nowhere', visible: false },
+      },
+    };
+    const voice = { sourceName: 'Voice', sceneItemId: 8, sceneItemEnabled: false };
+    const mic = { sourceName: 'Mic', sceneItemId: 5, sceneItemEnabled: true };
+    const client = fakeClient([
+      ok('GetSceneItemList', { sceneItems: [voice] }),
+      ok('GetSceneItemList', { sceneItems: [] }),
+      ok('GetSceneItemList', { sceneItems: [] }),
+      ok('GetSceneItemList', { sceneItems: [] }),
+      failed('GetSceneItemList'),
+      ok('GetGroupSceneItemList', { sceneItems: [mic] }),
+      failed('GetSceneItemList'),
+      failed('GetGroupSceneItemList'),
+      ok('GetSourceFilter', { filterSettings: { setting_int: 12 } }),
+      ok('GetSourceFilter', { filterSettings: { setting_int: 6 } }),
+    ]);
+
+    expect(await readObsState(client, withItems)).toEqual({
+      sceneItems: { C: [voice], T: [], L1: [], L2: [], Voice: [mic] },
+      borderThickness: { camBorder: 12, infoBorder: 6 },
+      fontSizes: {},
+    });
+    expect(vi.mocked(client.callBatch).mock.calls[0][0].slice(4, 8)).toEqual([
+      { requestType: 'GetSceneItemList', requestData: { sceneName: 'Voice' } },
+      { requestType: 'GetGroupSceneItemList', requestData: { sceneName: 'Voice' } },
+      { requestType: 'GetSceneItemList', requestData: { sceneName: 'Nowhere' } },
+      { requestType: 'GetGroupSceneItemList', requestData: { sceneName: 'Nowhere' } },
+    ]);
+  });
+
+  it('reads the toggled items even without standby settings or sized texts', async () => {
+    const client = fakeClient([ok('GetSceneItemList', { sceneItems: [] }), failed('GetGroupSceneItemList')]);
+
+    expect(
+      await readObsState(client, {
+        container: 'C',
+        participants: {},
+        items: { Voice: { visible: true } },
+        scenes: {},
+      }),
+    ).toEqual({ sceneItems: { C: [] }, borderThickness: {}, fontSizes: {} });
+  });
 });

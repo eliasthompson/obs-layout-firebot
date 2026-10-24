@@ -96,8 +96,9 @@ every machine makes the same presets and there is nothing else to keep. Keep the
   color source is sized to the region's border box, the region grown by `regionBorder`, so `regionBorder` is the
   visible border. `borderPadding` is how far those filters extend the source past it, such as a shadow's size: the
   item sits that much further out, and the padding never pushes regions apart.
-- Scene items the script toggles should have **no** show/hide transition. `obs:deploy` sets that in the scene
-  collection file, around a restart of OBS.
+- Scene items the script lays out should have **no** show/hide transition, since it fades them itself. `obs:deploy`
+  sets that in the scene collection file, around a restart of OBS. [Toggled items](#toggled-items-and-fades), and
+  every item of the canvas's `fadeScenes`, get a Fade instead.
 - For standby screens, a **standby text** scene in the container, below the participant layouts, holding one text
   source per screen, and any standby widgets as items of the container. `obs:deploy` crops the text scene at the canvas
   center: left of it on a landscape canvas, below it on a portrait one.
@@ -158,6 +159,14 @@ export default {
       // The scene in the container that holds the standby texts, the height of the standby line, and how far past
       // the line a text shows
       standby: { textScene: '[Widget] Standby Text', lineLength: 540, textGap: 30 },
+      // Optional: items scenes and modifiers show and hide, with whether they show when neither says; they fade
+      // through OBS's own Fade, audio included. See Toggled items and fades
+      items: {
+        '[Audio] Voice': { visible: true },
+        Music: { source: '[Audio] Music', scene: '[Audio] Background', visible: false },
+      },
+      // Optional: scenes and groups whose every item obs:deploy gives a Fade, such as a region's source list
+      fadeScenes: ['[List] Content 1 Sources'],
     },
     // Optional: Aitum Vertical's canvas, by the name OBS lists it under; see Canvases. The scenes name participants by
     // the same keys, and its OBS scenes have names of their own, so the two canvases' scenes never look alike
@@ -216,9 +225,11 @@ export default {
     },
     // Standby screens: every participant collapses into a line at the layout area's center and the text slides out from
     // behind it; `line` names whose main border is the line, the first participant when left out
-    '[Standby] Starting Soon': { standby: { text: '[Text] Starting Soon' } },
+    '[Standby] Starting Soon': { standby: { text: '[Text] Starting Soon' }, items: { Music: true } },
     '[Standby] Be Right Back': {
       standby: { text: '[Text] Be Right Back', line: '[Layout] Person 2' },
+      // Mutes the voice while away; scenes that do not say bring it back
+      items: { '[Audio] Voice': false, Music: true },
       canvases: { portrait: false },
     },
   },
@@ -230,6 +241,8 @@ export default {
     // A region config switches the region on, so the strip's whole shape lives here
     Timer: { config: { info: { aspectRatio: '250:49', isMainAttached: true } } },
     Names: { config: { hasName: true } },
+    // A modifier may only toggle items, over whatever the scene says
+    Muted: { items: { '[Audio] Voice': false } },
   },
   // Optional: where the tools find OBS and Firebot when the defaults do not fit this machine; see Machine settings
   // obs: { sceneCollection: 'Untitled', executable: 'C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe' },
@@ -245,8 +258,8 @@ export default {
 | `duration`      | Move duration in milliseconds. Default `300`.                                                                                                                                                        |
 | `config`        | The `LayoutConfig` every participant starts from; see [Layers and modifiers](#layers-and-modifiers).                                                                                                 |
 | `regions`       | Region settings every participant starts from: `inset`, `boundsAlignment`, `boundsType`, `cropToBounds`, `fontSizeMax`, `fontSizeMin` per region; see [Layers and modifiers](#layers-and-modifiers). |
-| `scenes`        | Compositions by scene key: the participants shown, in layout order, each with the `config` the composition changes, and the modifiers the scene forces.                                              |
-| `modifiers`     | `LayoutConfig`s presets switch on and off over any scene; see [Layers and modifiers](#layers-and-modifiers).                                                                                         |
+| `scenes`        | Compositions by scene key: the participants shown, in layout order, each with the `config` the composition changes, the modifiers the scene forces, and the items it toggles.                        |
+| `modifiers`     | `LayoutConfig`s and item toggles presets switch on and off over any scene; see [Layers and modifiers](#layers-and-modifiers).                                                                        |
 | `obs`           | Optional. `url` and `password` are used over Firebot's OBS integration settings; see [Machine settings].                                                                                             |
 | `firebot`       | Optional. Where the tools find Firebot; see [Machine settings].                                                                                                                                      |
 
@@ -261,9 +274,12 @@ Each canvas takes:
 | `regions`      | Optional. This canvas's region settings, over the config's and under each participant's.                                                                                                                                    |
 | `participants` | Every participant on the canvas, keyed by the name scenes use for it, with its layout scene in `scene` when that is not the key, the source (and border) for each region, and the participant's own `config` and `regions`. |
 | `standby`      | Needed for standby scenes on this canvas: `textScene`, `lineLength`, `textGap`; see [Standby screens](#standby-screens).                                                                                                    |
+| `items`        | Optional. Items scenes and modifiers show and hide, by the key they name them by; see [Toggled items and fades](#toggled-items-and-fades).                                                                                  |
+| `fadeScenes`   | Optional. OBS scenes and groups whose every item `obs:deploy` gives a Fade; see [Toggled items and fades](#toggled-items-and-fades).                                                                                        |
 
-A scene entry may carry its own `options` and `duration`, a `standby` entry that makes it a standby screen, and
-`canvases`, what it changes on each canvas; see [Canvases](#canvases).
+A scene entry may carry its own `options` and `duration`, a `standby` entry that makes it a standby screen, `items`,
+the items it shows (`true`) or hides (`false`), and `canvases`, what it changes on each canvas; see
+[Canvases](#canvases).
 Region names are those of `LayoutMetric`: `contentMain`,
 `camera`, `contentAux`, `info`, `name`. Each bound source takes a `source` and an optional `border`, the OBS items.
 How a source sits in its region is set per region in `regions`: on the config for every participant, on a pool entry
@@ -319,11 +335,34 @@ Modifiers are the switches: named layout configs that presets switch on and off 
 up. A region config in any layer switches the region on, so a region that only a modifier should show, such as a
 timer strip, is described in the modifier alone. Switched-on modifiers stay on across scene changes, so a scene preset applies its scene with them, and a scene
 can force one on or off with its `modifiers` (`{ Timer: false }`), whatever is switched on. A modifier applies to
-every shown participant unless it names `participants`. The script keeps the active scene and modifiers in the
+every shown participant unless it names `participants`. A modifier's `items` toggle items over the scene's, and a
+modifier with only `items` leaves the layout as it is, such as a `Muted` switch for the voice. The script keeps the active scene and modifiers in the
 Firebot variable named after the config variable with `State` added, and `firebot:deploy` makes a preset per scene
 key, an `<name> On` and `<name> Off` preset per modifier, and `Reset Modifiers`. A modifier preset run before any
 scene preset only remembers the modifier. With the example above, eight content shapes with a timer and a keyed
 camera as modifiers make eight scene presets and five modifier presets instead of 32 scenes.
+
+### Toggled items and fades
+
+A canvas's `items` are items the presets show and hide that the layout does not move, such as audio groups: the voice
+muted on standby screens, music only between scenes. Each is keyed by the name scenes and modifiers use for it, with
+its OBS source in `source` when that is not the key, the OBS scene or group that holds it in `scene` when that is not
+the container, and `visible`, whether it shows when nothing says otherwise. Whether an item shows in a scene is its
+`visible`, then the scene's `items`, then each modifier in effect in the order `modifiers` lists them, the last that
+names it winning, so a scene that does not name an item puts it back to `visible`. The same keys on every canvas let
+one list of scenes toggle each canvas's own items; a canvas without a key leaves it out. The script shows and hides
+the items in the same batch as the moves, so they fade with the layout.
+
+A toggled item fades through its own show and hide transition, which `obs:deploy` sets to OBS's Fade over the config's
+`duration`. OBS fades an item's audio along with its picture while the transition runs, so an audio group fades out
+rather than cutting. A canvas's `fadeScenes` gives the same Fade to every item of the OBS scenes and groups it lists,
+such as the scenes that list a region's sources, so switching a source in them by hand or from Firebot fades too.
+Items the layout moves keep the transition `obs:deploy` gives them. OBS's Fade brightens toward white on anything with
+transparency, such as a keyed or browser source, so leave those scenes out.
+
+OBS mixes the audio of every canvas into one mix that every output takes a track of, and a source shown on two canvases
+is mixed once, outside its scenes and their transitions. Keep audio sources on one canvas, usually the main one, so
+hiding them silences them and their fades are heard.
 
 ### Canvases
 
@@ -535,13 +574,15 @@ other programs or older tools made, and every other file stay as they are. Nothi
    Move Source filters removed, the standby text scene cropped. This part is idempotent and is all that runs without
    the restart. A canvas OBS does not have is reported and skipped.
 2. It asks which scene collection OBS has loaded, and whether OBS is streaming or recording.
-3. It sets every toggled item's show and hide transition in the collection file, which only that file holds and OBS
-   only reads at startup, so it asks to restart OBS around writing it. Scene names can repeat across canvases, so each
-   scene is found on its own canvas. OBS saves the collection on exit, so the
-   setup's filters are in the file before it is edited. When every item already has its transition, and the saved
-   file holds every bound item, there is nothing to write and OBS is not restarted. `--transition none|fade` and
-   `--duration` set what the items get (default `none`, `300`). `--no-restart`, or declining, leaves the restart for a
-   later `obs:deploy`.
+3. It sets the show and hide transitions in the collection file, which only that file holds and OBS only reads at
+   startup, so it asks to restart OBS around writing it: the items the layout moves get `--transition none|fade` over
+   `--duration` (default `none`, `300`), and toggled items and every item of the `fadeScenes` a Fade over the config's
+   `duration`. Scene names can repeat across canvases, so each scene is found on its own canvas first, then on any, as
+   a source list nested from the main canvas is. A group's items are set in the group and in the copy OBS keeps of
+   them in its parent scene. OBS saves the collection on exit, so the setup's filters are in the file before it is
+   edited. When every item already has its transition, and the saved file holds every bound item, toggled item, and
+   fade scene, there is nothing to write and OBS is not restarted. `--no-restart`, or declining, leaves the restart for
+   a later `obs:deploy`.
 
 ### Deploying a config change
 
@@ -550,7 +591,8 @@ other programs or older tools made, and every other file stay as they are. Nothi
 1. It checks the scenes and modifiers, then reads every bound scene, item, and filter back from OBS on every canvas,
    and refuses to deploy when something is missing, so a typo in a source name is caught before a preset ever fails.
    Missing filters, and items whose bounds differ from the config's `boundsType` or `cropToBounds`, point at
-   `obs:deploy`. A canvas OBS does not have is reported and skipped. It waits for OBS to be
+   `obs:deploy`. A toggled item has to be in its scene or group, and cannot be an item the layout moves, which it
+   shows and hides itself; a scene or modifier that toggles a key no canvas has is an error. A canvas OBS does not have is reported and skipped. It waits for OBS to be
    started when it is not running; pass `--skip-obs` to check the scenes and modifiers alone.
 2. It stores the config in the `layoutScenes` variable (or `firebot.variable`). The next preset run uses it; nothing
    needs a restart.

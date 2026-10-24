@@ -94,9 +94,25 @@ export interface SceneParticipant {
  * whatever is on; a scene can force one on or off with its `modifiers`.
  */
 export interface Modifier {
-  config: LayoutConfig;
+  /** The layout config merged over the shown participants'; nothing when the modifier only toggles items. */
+  config?: LayoutConfig;
   /** Only these participants, by their key in each canvas's `participants`; every participant when left out. */
   participants?: string[];
+  /** Items the modifier shows (`true`) or hides (`false`), by their key in each canvas's `items`, over the scene's. */
+  items?: Record<string, boolean>;
+}
+
+/**
+ * An item that scenes and modifiers show and hide, such as an audio group to mute on standby screens. It fades through
+ * its own show and hide transition, which `obs:deploy` sets to a Fade, so its audio fades with it.
+ */
+export interface ToggledItem {
+  /** OBS source name of the item; its key when left out. */
+  source?: string;
+  /** The OBS scene or group that holds the item; the canvas's container when left out. */
+  scene?: string;
+  /** Whether the item shows when neither the scene nor a modifier in effect says. */
+  visible: boolean;
 }
 
 export interface OverlayBinding {
@@ -146,6 +162,8 @@ export interface SceneBinding {
   standby?: StandbyBinding;
   /** Modifiers this scene forces on (`true`) or off (`false`), whatever is active, by their key in `modifiers`. */
   modifiers?: Record<string, boolean>;
+  /** Items this scene shows (`true`) or hides (`false`), by their key in each canvas's `items`, over their defaults. */
+  items?: Record<string, boolean>;
   /**
    * Per canvas, by its key in `canvases`: what the scene changes there, or `false` to leave that canvas as it is. A
    * canvas without every participant the scene shows, or without standby settings for a standby scene, leaves the
@@ -233,6 +251,16 @@ export interface CanvasConfig {
   participants: Record<string, ParticipantPoolEntry>;
   /** Needed by scenes with a `standby` entry. */
   standby?: StandbySettings;
+  /**
+   * Items scenes and modifiers show and hide on this canvas, by the key they name them by. The same keys on every
+   * canvas let one list of scenes toggle each canvas's own items; a canvas without a key leaves it out.
+   */
+  items?: Record<string, ToggledItem>;
+  /**
+   * OBS scenes and groups whose every item `obs:deploy` gives a Fade show and hide transition over the config's
+   * `duration`, such as the scenes that list a region's sources. Items the layout moves keep the transition it sets.
+   */
+  fadeScenes?: string[];
 }
 
 export interface ScenesConfig {

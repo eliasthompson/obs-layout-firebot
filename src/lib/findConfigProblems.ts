@@ -12,6 +12,7 @@ import {
 } from '@/constants/filterNames';
 import { findSharedSourceProblems } from '@/lib/findSharedSourceProblems';
 import { listBindings } from '@/lib/listBindings';
+import { listItems } from '@/lib/listItems';
 import { listOverlays } from '@/lib/listOverlays';
 import { moveFilterName } from '@/lib/moveFilterName';
 import { resolveBorderColor } from '@/lib/resolveBorderColor';
@@ -23,8 +24,8 @@ const SETUP_HINT = 'run `obs-layout-firebot obs:deploy`';
 
 /**
  * Everything in a canvas's config that would make a preset fail or misbehave, checked against what OBS has on that
- * canvas: missing scenes, items, and filters, and items whose bounds differ from the config's, are errors; a text
- * option on a source that is not text is a warning.
+ * canvas: missing scenes, items, and filters, items whose bounds differ from the config's, and toggled items that are
+ * missing or that the layout moves itself, are errors; a text option on a source that is not text is a warning.
  * `findSceneProblems` checks the scenes and modifiers, which every canvas shares.
  */
 export const findConfigProblems = (config: CanvasScenesConfig, inventory: ObsInventory): ConfigProblem[] => {
@@ -96,6 +97,16 @@ export const findConfigProblems = (config: CanvasScenesConfig, inventory: ObsInv
     }
   }
 
+  // Toggled items need their scene or group, and cannot be items the layout moves, which it shows and hides itself
+  const laidOut = new Set(listBindings(config).map(({ scene, source }) => `${scene}\n${source}`));
+  for (const { key, scene, source } of listItems(config)) {
+    if (!hasScene(scene)) error(`item "${key}": scene or group "${scene}" does not exist in OBS`);
+    else if (!hasItem(scene, source)) error(`"${scene}" has no item "${source}" (item "${key}")`);
+    if (laidOut.has(`${scene}\n${source}`)) {
+      error(`item "${key}" is "${source}" in "${scene}", which the layout shows and hides itself`);
+    }
+  }
+
   // The border color filter is the user's own; setup only adds the Move Value filter that fades it
   const borderColor = resolveBorderColor(config);
   const bindings = listBindings(config).filter(({ scene, source }) => hasScene(scene) && hasItem(scene, source));
@@ -158,7 +169,8 @@ export const findConfigProblems = (config: CanvasScenesConfig, inventory: ObsInv
 
 /**
  * Everything in the scenes and modifiers every canvas shares that would make a preset fail: a scene that shows no
- * participants or no canvas, a forced modifier or a modifier participant that does not exist, and a source canvases
+ * participants or no canvas, a forced modifier, a modifier participant, or a toggled item that does not exist, and a
+ * source canvases
  * share that they would not fade alike (`findSharedSourceProblems`). A scene a canvas leaves out because the canvas
  * lacks what it shows is a warning, since it may be on purpose; the scene's `canvases: { <canvas>: false }` says so.
  */
@@ -169,12 +181,17 @@ export const findSceneProblems = (config: ScenesConfig): ConfigProblem[] => {
   const canvases = Object.keys(config.canvases).map((canvas) => ({ canvas, ...resolveCanvas(config, canvas) }));
   // Modifiers name participants by key; the canvases' views key them by their OBS scenes
   const layouts = new Set(Object.values(config.canvases).flatMap(({ participants }) => Object.keys(participants)));
+  const itemKeys = new Set(Object.values(config.canvases).flatMap(({ items }) => Object.keys(items ?? {})));
   const modifierNames = Object.keys(config.modifiers ?? {});
+  const unknownItems = (items: Record<string, boolean> | undefined) =>
+    Object.keys(items ?? {}).filter((key) => !itemKeys.has(key));
 
   for (const [name, modifier] of Object.entries(config.modifiers ?? {})) {
     for (const layout of modifier.participants ?? []) {
       if (!layouts.has(layout)) error(`modifier "${name}" names participant "${layout}", which no canvas has`);
     }
+    for (const key of unknownItems(modifier.items))
+      error(`modifier "${name}" toggles item "${key}", which no canvas has`);
   }
 
   for (const [sceneKey, scene] of Object.entries(config.scenes)) {
@@ -183,6 +200,8 @@ export const findSceneProblems = (config: ScenesConfig): ConfigProblem[] => {
     for (const name of Object.keys(scene.modifiers ?? {})) {
       if (!modifierNames.includes(name)) error(`scene "${sceneKey}" forces unknown modifier "${name}"`);
     }
+    for (const key of unknownItems(scene.items))
+      error(`scene "${sceneKey}" toggles item "${key}", which no canvas has`);
     const leftOut = canvases.filter(({ leftOut: left }) => Object.hasOwn(left, sceneKey));
     if (leftOut.length === canvases.length) {
       const reasons = leftOut.map(

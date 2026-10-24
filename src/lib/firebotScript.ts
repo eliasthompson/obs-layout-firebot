@@ -123,9 +123,10 @@ export const createRun =
       const summary = await runLayout({ config, sceneKey, modifiers, connection, connect });
       customVariableManager.addCustomVariable(stateVariable, nextState, 0);
       const shown = summary.steps.filter((step) => step.visible).length;
+      const toggled = summary.toggles.length ? `, ${String(summary.toggles.length)} toggled` : '';
 
       logger.info(
-        `OBS Layout: scene "${sceneKey}"${modifiers.length ? ` with ${modifiers.join(', ')}` : ''}, ${String(shown)} items shown, ${String(summary.steps.length - shown)} hidden, ${String(summary.requests.length)} requests in ${String(summary.durationMs)} ms.`,
+        `OBS Layout: scene "${sceneKey}"${modifiers.length ? ` with ${modifiers.join(', ')}` : ''}, ${String(shown)} items shown, ${String(summary.steps.length - shown)} hidden${toggled}, ${String(summary.requests.length)} requests in ${String(summary.durationMs)} ms.`,
       );
       for (const { canvas, skipped } of summary.canvases) {
         if (skipped) logger.warn(`OBS Layout: left the "${canvas}" canvas as it is: ${skipped}.`);

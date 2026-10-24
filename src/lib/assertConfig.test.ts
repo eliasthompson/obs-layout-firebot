@@ -46,6 +46,27 @@ describe('assertConfig', () => {
     }
   });
 
+  it('rejects toggled items without a default, and fade scenes that are not a list of names', () => {
+    for (const [landscape, message] of [
+      [{ ...canvas, items: [] }, 'config.canvases.landscape.items must be an object of items'],
+      [{ ...canvas, items: null }, 'config.canvases.landscape.items must be an object of items'],
+      [{ ...canvas, items: { Voice: true } }, 'config.canvases.landscape.items["Voice"].visible must be true or false'],
+      [{ ...canvas, items: { Voice: {} } }, 'config.canvases.landscape.items["Voice"].visible must be true or false'],
+      [{ ...canvas, fadeScenes: 'Lists' }, 'config.canvases.landscape.fadeScenes must be a list'],
+      [{ ...canvas, fadeScenes: ['Lists', 3] }, 'config.canvases.landscape.fadeScenes must be a list'],
+    ] as const) {
+      expect(() => {
+        assertConfig({ ...valid, canvases: { landscape } });
+      }).toThrow(message);
+    }
+    expect(() => {
+      assertConfig({
+        ...valid,
+        canvases: { landscape: { ...canvas, items: { Voice: { visible: false } }, fadeScenes: ['Lists'] } },
+      });
+    }).not.toThrow();
+  });
+
   it("points a version 3 standby's lineHeight at lineLength", () => {
     const standby = (settings: Record<string, unknown>) => ({
       ...valid,

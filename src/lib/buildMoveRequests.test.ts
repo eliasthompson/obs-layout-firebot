@@ -143,14 +143,31 @@ describe('buildMoveRequests', () => {
     expect(buildMoveRequests([layout, border])).toEqual(joinMovePhases([buildMovePhases([layout, border])]));
   });
 
+  it('toggles items after every move is enabled, so they fade as the moves start', () => {
+    const toggles = [
+      { scene: 'Voice', source: 'Mic', sceneItemId: 5, visible: false },
+      { scene: 'C', source: 'Music', sceneItemId: 16, visible: true },
+    ];
+    const requests = buildMoveRequests([layout], toggles);
+
+    expect(requests.slice(-2)).toEqual([
+      {
+        requestType: 'SetSceneItemEnabled',
+        requestData: { sceneName: 'Voice', sceneItemId: 5, sceneItemEnabled: false },
+      },
+      { requestType: 'SetSceneItemEnabled', requestData: { sceneName: 'C', sceneItemId: 16, sceneItemEnabled: true } },
+    ]);
+    expect(requests.slice(0, -2)).toEqual(buildMoveRequests([layout]));
+  });
+
   it('passes every stage through a function', () => {
-    const phases = buildMovePhases([border]);
+    const phases = buildMovePhases([border], [{ scene: 'C', source: 'Music', sceneItemId: 16, visible: true }]);
     const tagged = mapMovePhases(phases, (request) => ({
       ...request,
       requestData: { ...request.requestData, tag: 1 },
     }));
 
-    for (const stage of ['prepare', 'handoffs', 'sizes', 'moves'] as const) {
+    for (const stage of ['prepare', 'handoffs', 'sizes', 'moves', 'toggles'] as const) {
       expect(tagged[stage]).toEqual(
         phases[stage].map((request) => ({ ...request, requestData: { ...request.requestData, tag: 1 } })),
       );

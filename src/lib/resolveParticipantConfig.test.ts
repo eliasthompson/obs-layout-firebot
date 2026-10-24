@@ -45,6 +45,16 @@ describe('resolveParticipantConfig', () => {
     });
   });
 
+  it('changes nothing for a modifier that only toggles items', () => {
+    expect(
+      resolveParticipantConfig(
+        { participants: {}, modifiers: { Quiet: { items: { Voice: false } } } },
+        { layout: 'Nobody', config: { hasName: true } },
+        ['Quiet'],
+      ),
+    ).toEqual({ hasName: true });
+  });
+
   it('ignores unknown modifiers and participants without a pool config', () => {
     expect(resolveParticipantConfig({ participants: {} }, { layout: 'Nobody' }, ['Ghost'])).toEqual({});
   });

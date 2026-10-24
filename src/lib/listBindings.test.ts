@@ -106,6 +106,14 @@ describe('listBindings', () => {
         scenes: {},
       }),
     ).toEqual(['Program', 'Text', 'P1']);
+    expect(
+      listScenes({
+        container: 'Program',
+        participants: { P1: { sources: {} } },
+        items: { Voice: { visible: true }, Mic: { scene: 'Voice', visible: true } },
+        scenes: {},
+      }),
+    ).toEqual(['Program', 'P1', 'Voice']);
     expect(listScenes({ container: 'Program', participants: {}, scenes: {} })).toEqual(['Program']);
   });
 });

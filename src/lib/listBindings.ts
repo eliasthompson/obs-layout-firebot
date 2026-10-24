@@ -2,11 +2,13 @@ import type { Binding } from '@/types/MoveStep';
 import type { CanvasScenesConfig, LayoutRegionName } from '@/types/ScenesConfig';
 
 import { OBS_ALIGNMENT_FLAGS, OBS_BOUNDS_TYPES } from '@/constants/obsAlignment';
+import { listItemScenes } from '@/lib/listItems';
 import { listOverlays } from '@/lib/listOverlays';
 import { resolveRegionSettings } from '@/lib/resolveRegionSettings';
 
 /**
- * Every scene whose items a canvas's layout drives: the container, the standby text scene, and every layout scene.
+ * Every scene whose items a canvas's layout drives: the container, the standby text scene, every layout scene, and
+ * the scenes and groups that hold its toggled items.
  *
  * @param config - The canvas's view of the config.
  * @returns The scene names, once each.
@@ -16,6 +18,7 @@ export const listScenes = (config: CanvasScenesConfig): string[] => [
     config.container,
     ...(config.standby ? [config.standby.textScene] : []),
     ...Object.keys(config.participants),
+    ...listItemScenes(config),
   ]),
 ];
 
