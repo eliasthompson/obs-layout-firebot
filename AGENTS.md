@@ -83,6 +83,20 @@ Before finishing a change, run typecheck, lint, format check, test coverage, and
 - The minimum OBS, obs-websocket, Move Transition, and Firebot versions are listed in README.md. Using a request,
   filter setting, or Firebot API that raises one of them means updating that list.
 
+## Commits
+
+- [Conventional Commits](https://www.conventionalcommits.org/): `feat`, `fix`, `docs`, `refactor`, `build`, `ci`, or
+  `chore`. A breaking change adds `!` after the type and a `BREAKING CHANGE:` footer saying what to change.
+- The subject is one lowercase sentence in the imperative, with no period, saying what changes and, after a comma,
+  why: `fix: let obs:prune take --config like every other command, so project scripts can pass it`.
+- Add a body only when the subject cannot carry the change: a paragraph, or a list for several changes, wrapped at 120
+  columns.
+- A release is a commit of its own, `chore: release vX.Y.Z`, with no body or trailers. Bump with
+  `npm version <major|minor|patch> --no-git-tag-version` (major for a breaking change since the last release, minor for
+  a feature, patch otherwise), and tag the commit with an annotated `vX.Y.Z` tag of the same message. Pushing the tag
+  runs `.github/workflows/publish.yml`, which publishes to npm and creates the GitHub release; it fails when the tag
+  and package.json disagree.
+
 ## Toolchain constraints
 
 - TypeScript is pinned to 6.x because typescript-eslint does not support 7.x yet. Do not upgrade it until it does.
