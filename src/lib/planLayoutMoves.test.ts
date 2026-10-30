@@ -103,15 +103,16 @@ describe('planLayoutMoves', () => {
       region: { x: 1485, y: 120, width: 420, height: 126 },
       size: { width: 402, height: 108 },
     });
+    // The name is asked to be as tall as the insets and a 48 px line at the unmeasured 1.25 line height
     expect(steps.find((step) => step.source === 'name')).toMatchObject({
-      region: { x: 1512, y: 827, width: 366, height: 106 },
+      region: { x: 1512, y: 873, width: 366, height: 60 },
       fontSize: 48,
     });
     expect(steps.find((step) => step.source === 'cam')).toMatchObject({ region: metric.camera });
     expect(steps.find((step) => step.source === 'cam')?.fontSize).toBeUndefined();
   });
 
-  it('keeps the font size within its bounds and asks the layout for the matching smallest name height', () => {
+  it('keeps the font size within its bounds and asks the layout for the matching name heights', () => {
     const bounded: CanvasScenesConfig = {
       ...config,
       participants: {
@@ -124,28 +125,30 @@ describe('planLayoutMoves', () => {
         tall: { participants: [{ layout: 'L', config: { contentMain: null, hasName: true } }] },
         tiny: {
           participants: [{ layout: 'L', config: { hasName: true } }],
-          options: { ...bare, canvasWidth: 480, canvasHeight: 270 },
+          options: { ...bare, canvasWidth: 240, canvasHeight: 135 },
         },
         explicit: {
           participants: [{ layout: 'L', config: { hasName: true } }],
-          options: { ...bare, canvasWidth: 480, canvasHeight: 270, nameHeightMin: 0 },
+          options: { ...bare, canvasWidth: 240, canvasHeight: 135, nameHeightMin: 0 },
         },
       },
     };
     const [tallMetric] = generateLayout([{ contentMain: null, hasName: true }], {
       ...options,
-      nameHeightMin: 48,
+      nameHeightMin: 54,
+      nameHeightMax: 84,
     });
     const tall = planLayoutMoves(bounded, 'tall').find((step) => step.source === 'name');
     const tiny = planLayoutMoves(bounded, 'tiny').find((step) => step.source === 'name');
     const explicit = planLayoutMoves(bounded, 'explicit').find((step) => step.source === 'name');
 
-    // A third of the 810 px camera is capped by the library at 130; 106 px inside the insets fits 84 px of unmeasured
-    // text, so the font stays at its 48 px maximum
+    // Two 12 px insets plus a 48 px font at the unmeasured 1.25 line height cap the name on the 810 px camera at 84,
+    // so the font stays at its 48 px maximum
     expect(tall?.region).toEqual(shrinkRegion(tallMetric.name ?? neverRegion, 12));
+    expect(tall?.region?.height).toBe(84 - 24);
     expect(tall?.fontSize).toBe(48);
-    // Two 12 px insets plus the 24 px smallest font ask the layout for a 48 px name; the font sizes down to 24
-    expect(tiny?.region?.height).toBe(48 - 24);
+    // Two 12 px insets plus a 24 px font's 30 px line ask the layout for a 54 px name; the font sizes down to 24
+    expect(tiny?.region?.height).toBe(54 - 24);
     expect(tiny?.fontSize).toBe(24);
     // An explicit nameHeightMin in the scene options or the config options is left alone
     expect(explicit?.region?.height).toBeLessThan(24);
@@ -156,10 +159,10 @@ describe('planLayoutMoves', () => {
     );
   });
 
-  it('asks for the smallest font height alone as the smallest name height when the text has no inset', () => {
+  it('asks for a line at the smallest font alone as the smallest name height when the text has no inset', () => {
     const plain: CanvasScenesConfig = {
       ...config,
-      participants: { L: { sources: { name: { source: 'name' } }, regions: { name: { fontSizeMin: 60 } } } },
+      participants: { L: { sources: { name: { source: 'name' } }, regions: { name: { fontSizeMin: 80 } } } },
       scenes: {
         tiny: {
           participants: [{ layout: 'L', config: { hasName: true } }],
@@ -168,8 +171,62 @@ describe('planLayoutMoves', () => {
       },
     };
 
-    // A third of the 270 px content is 90, capped at 45 by the library, then raised to the 60 px smallest font
-    expect(planLayoutMoves(plain, 'tiny').find((step) => step.source === 'name')?.region?.height).toBe(60);
+    // A third of the 270 px content is 90, raised to the 100 px line of the 80 px smallest font
+    expect(planLayoutMoves(plain, 'tiny').find((step) => step.source === 'name')?.region?.height).toBe(100);
+  });
+
+  it('asks for no name heights for a participant without a name source', () => {
+    const unnamed: CanvasScenesConfig = {
+      ...config,
+      participants: {
+        A: { sources: { name: { source: 'name' } } },
+        B: { sources: { camera: { source: 'cam' } }, regions: { name: { fontSizeMax: 10 } } },
+      },
+      scenes: {
+        both: {
+          participants: [
+            { layout: 'A', config: { hasName: true } },
+            { layout: 'B', config: { hasName: true } },
+          ],
+        },
+      },
+    };
+
+    // B's 10 px font would cap every name at 13 px, but B has no name to size
+    expect(planLayoutMoves(unnamed, 'both').find((step) => step.source === 'name')?.region?.height).toBeGreaterThan(13);
+  });
+
+  it('measures the line height the name heights ask for from the source, rounding a line up', () => {
+    const measured: CanvasScenesConfig = {
+      ...config,
+      participants: {
+        L: {
+          sources: { name: { source: 'name' } },
+          regions: { name: { inset: 12, fontSizeMin: 24, fontSizeMax: 47 } },
+        },
+      },
+      scenes: {
+        tall: { participants: [{ layout: 'L', config: { contentMain: null, hasName: true } }] },
+        tiny: {
+          participants: [{ layout: 'L', config: { hasName: true } }],
+          options: { ...bare, canvasWidth: 240, canvasHeight: 135 },
+        },
+      },
+    };
+    // A 40 px font that renders 60 px tall has a line height of 1.5
+    const state = {
+      sceneItems: {
+        L: [{ sourceName: 'name', sceneItemId: 1, sceneItemEnabled: true, sourceSize: { width: 300, height: 60 } }],
+      },
+      borderThickness: {},
+      fontSizes: { name: 40 },
+    } satisfies ObsState as ObsState;
+    const nameIn = (sceneKey: string) =>
+      planLayoutMoves(measured, sceneKey, state).find((step) => step.source === 'name');
+
+    // 47 × 1.5 is 70.5, rounded up to 71 so the font sized back from it is the whole 47
+    expect(nameIn('tall')).toMatchObject({ region: { height: 71 }, fontSize: 47 });
+    expect(nameIn('tiny')).toMatchObject({ region: { height: 36 }, fontSize: 24 });
   });
 
   it('sizes the font from how tall the source renders at its current size, and assumes a line height otherwise', () => {
@@ -181,7 +238,13 @@ describe('planLayoutMoves', () => {
           regions: { name: { inset: 12, fontSizeMin: 24, fontSizeMax: 100 } },
         },
       },
-      scenes: { tall: { participants: [{ layout: 'L', config: { contentMain: null, hasName: true } }] } },
+      // A set name cap keeps the name 130 px tall, however tall a line measures
+      scenes: {
+        tall: {
+          participants: [{ layout: 'L', config: { contentMain: null, hasName: true } }],
+          options: { nameHeightMax: 130 },
+        },
+      },
     };
     const stateWith = (sourceHeight: number, fontSize?: number) =>
       ({
@@ -313,16 +376,31 @@ describe('planLayoutMoves', () => {
     expect(mainRight - infoLeft).toBe(6);
   });
 
-  it('sends unused regions to a 1x1 point at the canvas center, hidden, with the scene duration', () => {
-    const steps = planLayoutMoves(config, 'Camera 1P');
-    const content = steps.find((step) => step.source === '[Group] Content 1');
-    const border = steps.find((step) => step.source === '[Border] Content 1');
+  it('sends unused regions to a 1x1 point at the middle of the main region, hidden, with the scene duration', () => {
+    const scenes = {
+      '2P': {
+        participants: [{ layout: '[Layout] Person 1', config: { camera: null } }, { layout: '[Layout] Person 2' }],
+        duration: 500,
+      },
+    };
+    const [{ contentMain = neverRegion }] = generateLayout([{ camera: null }, {}], options);
+    const middle = {
+      x: Math.round(contentMain.x + contentMain.width / 2),
+      y: Math.round(contentMain.y + contentMain.height / 2),
+      width: 1,
+      height: 1,
+    };
+    const steps = planLayoutMoves({ ...config, scenes }, '2P');
+    const camera = steps.find((step) => step.source === '[Group] Camera 1');
+    const border = steps.find((step) => step.source === '[Border] Camera 1');
 
-    expect(content).toMatchObject({ region: { x: 960, y: 540, width: 1, height: 1 }, visible: false, duration: 500 });
-    expect(border).toMatchObject({ region: { x: 960, y: 540, width: 1, height: 1 }, size: { width: 1, height: 1 } });
+    // The left participant's main content is left of the canvas center, so its camera shrinks into it there
+    expect(middle.x).toBeLessThan(960);
+    expect(camera).toMatchObject({ region: middle, visible: false, duration: 500 });
+    expect(border).toMatchObject({ region: middle, size: { width: 1, height: 1 } });
   });
 
-  it("centers that point on the layout area, so uneven margins move it, the scene's own options included", () => {
+  it("centers that point on a main camera, so uneven margins move it, the scene's own options included", () => {
     const portrait = {
       ...config,
       options: { ...options, canvasWidth: 1080, canvasHeight: 1920, canvasMarginTop: 144, canvasMarginBottom: 422 },
@@ -351,7 +429,7 @@ describe('planLayoutMoves', () => {
     });
   });
 
-  it('sends a name with no host left to the canvas center', () => {
+  it('sends regions to the canvas center when the layout shows nothing of the participant', () => {
     const steps = planLayoutMoves(
       {
         ...config,

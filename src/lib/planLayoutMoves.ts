@@ -48,40 +48,56 @@ const resolveOption = <Name extends keyof typeof LAYOUT_OPTIONS_DEFAULT>(
 const DEFAULT_LINE_HEIGHT_RATIO = 1.25;
 
 /**
- * The font size that fits a text source into a height: its largest size, sized down toward its smallest when a line
- * at the largest would not fit. How tall a line renders per pixel of font size is measured from the source itself,
- * its rendered height at its current font size, which also counts the lines it wraps to.
+ * How tall a text source's line renders per pixel of font size: its rendered height at its current font size, which
+ * also counts the lines it wraps to, or a common line height when it could not be measured.
  */
-const fontSizeFor = (
-  settings: RegionSettings,
-  height: number,
-  fontSize: number | undefined,
-  sourceHeight: number | undefined,
-) => {
-  const lineHeightRatio = fontSize && sourceHeight ? sourceHeight / fontSize : DEFAULT_LINE_HEIGHT_RATIO;
-  return Math.min(
+const lineHeightRatioFor = (fontSize: number | undefined, sourceHeight: number | undefined) =>
+  fontSize && sourceHeight ? sourceHeight / fontSize : DEFAULT_LINE_HEIGHT_RATIO;
+
+/**
+ * The font size that fits a text source into a height: its largest size, sized down toward its smallest when a line
+ * at the largest would not fit.
+ */
+const fontSizeFor = (settings: RegionSettings, height: number, lineHeightRatio: number) =>
+  Math.min(
     settings.fontSizeMax ?? Number.POSITIVE_INFINITY,
     Math.max(settings.fontSizeMin ?? 1, Math.floor(height / lineHeightRatio)),
   );
-};
 
 /** A shown participant's settings for a region: the config's, their own, and the scene's, layered. */
 const settingsFor = (config: CanvasScenesConfig, participant: SceneParticipant, region: LayoutRegionName) =>
   resolveRegionSettings(config, config.participants[participant.layout], region, participant.regions);
 
 /**
- * The smallest name height the shown participants' text sources ask for: the inset on both sides plus the smallest
- * font size. `undefined` when no binding sets a smallest font, or when the options already set `nameHeightMin`.
+ * The name heights the shown participants' name text sources ask for: the inset on both sides plus a line at the
+ * smallest font size for `nameHeightMin`, and at the largest for `nameHeightMax`, the largest of either across them.
+ * Each is left out when no name binding sets that font size, or when the options already set it.
+ *
+ * @param lineHeightRatio - How tall a text source in a layout renders per pixel of font size.
  */
-const derivedNameHeightMin = (config: CanvasScenesConfig, scene: SceneBinding, shown: SceneParticipant[]) => {
-  if (scene.options?.nameHeightMin !== undefined || config.options?.nameHeightMin !== undefined) return undefined;
+const derivedNameHeights = (
+  config: CanvasScenesConfig,
+  scene: SceneBinding,
+  shown: SceneParticipant[],
+  lineHeightRatio: (layout: string, source: string) => number,
+): Pick<LayoutOptions, 'nameHeightMax' | 'nameHeightMin'> => {
+  const derive = (option: 'nameHeightMax' | 'nameHeightMin', setting: 'fontSizeMax' | 'fontSizeMin') => {
+    if (scene.options?.[option] !== undefined || config.options?.[option] !== undefined) return {};
 
-  const minimums = shown.flatMap((participant) => {
-    const name = settingsFor(config, participant, 'name');
-    return name.fontSizeMin ? [(name.inset ?? 0) * 2 + name.fontSizeMin] : [];
-  });
+    const heights = shown.flatMap((participant) => {
+      const binding = config.participants[participant.layout].sources.name;
+      const name = settingsFor(config, participant, 'name');
+      const fontSize = name[setting];
+      // A line rounds up, so the font sized back from the height is the whole font size
+      return binding && fontSize
+        ? [(name.inset ?? 0) * 2 + Math.ceil(fontSize * lineHeightRatio(participant.layout, binding.source))]
+        : [];
+    });
 
-  return minimums.length ? Math.max(...minimums) : undefined;
+    return heights.length ? { [option]: Math.max(...heights) } : {};
+  };
+
+  return { ...derive('nameHeightMin', 'fontSizeMin'), ...derive('nameHeightMax', 'fontSizeMax') };
 };
 
 /** The layout of the scene's participants, with ratios declared for inset regions holding inside the inset. */
@@ -90,9 +106,9 @@ const layoutMetrics = (
   scene: SceneBinding,
   shown: SceneParticipant[],
   configs: LayoutConfig[],
+  lineHeightRatio: (layout: string, source: string) => number,
 ): LayoutMetric[] => {
-  const nameHeightMin = derivedNameHeightMin(config, scene, shown);
-  const sceneOptions = { ...scene.options, ...(nameHeightMin === undefined ? {} : { nameHeightMin }) };
+  const sceneOptions = { ...scene.options, ...derivedNameHeights(config, scene, shown, lineHeightRatio) };
   const generate = (layoutConfigs: LayoutConfig[]) =>
     createLayoutGenerator(config.options)(layoutConfigs, sceneOptions);
   // Declared ratios hold inside a region's inset (the name has no ratio), so the layout gets adjusted outer ratios
@@ -136,8 +152,8 @@ export const overlaysLeave = (config: CanvasScenesConfig, sceneKey: string, stat
  * Plan the transition to a scene key: one move step per bound item of the participants it shows, one visibility step
  * per participant layout in the pool, and one step per standby text and widget. Each shown participant's config is
  * built up from the config's base, their pool entry, the scene, and the modifiers in effect. Regions a layout does
- * not use are sent to a 1x1 point at the middle of the layout area and hidden, so a later layout grows them out of that
- * point. The name is the exception: it has no border and always sits over a host region, so without one it stays
+ * not use are sent to a 1x1 point at the middle of the participant's main region and hidden, so they shrink into the
+ * main content and a later layout grows them out of it. The name is the exception: it has no border and always sits over a host region, so without one it stays
  * hidden where it would be, and only fades.
  *
  * A standby scene collapses every participant's regions into the standby line instead: content to no width (no height
@@ -188,7 +204,8 @@ export const planLayoutMoves = (
   const line = config.standby ? standbyLine(config, config.standby.lineLength) : undefined;
   const textGap = config.standby?.textGap ?? DEFAULT_STANDBY_TEXT_GAP;
   const regionBorder = resolveOption('regionBorder', config, scene.options);
-  // Regions the layout leaves out wait at the middle of the layout area, where the standby line is too
+  // The middle of the layout area, where the standby line is, and where a participant's regions wait when its layout
+  // shows none of them
   const area = layoutArea({ ...config.options, ...scene.options });
   const neutral: Rect = {
     x: Math.round(area.x + area.width / 2),
@@ -200,10 +217,21 @@ export const planLayoutMoves = (
   const duration = scene.duration ?? config.duration ?? DEFAULT_DURATION;
   const shownIndex = new Map(shown.map((participant, index) => [participant.layout, index]));
   const inEffect = resolveModifiers(config, scene, modifiers);
+
+  // Record lookups are typed as always present; a scene OBS could not report is missing
+  const sceneItem = (sceneName: string, source: string) =>
+    (state.sceneItems[sceneName] as ObsSceneItem[] | undefined)?.find((item) => item.sourceName === source);
+  const isShown = (sceneName: string, source: string) => isItemShown(state, sceneName, source);
+  const lineHeightRatio = (layout: string, source: string) =>
+    lineHeightRatioFor(
+      source in state.fontSizes ? state.fontSizes[source] : undefined,
+      sceneItem(layout, source)?.sourceSize?.height,
+    );
+
   const configs = scene.standby
     ? []
     : shown.map((participant) => resolveParticipantConfig(config, participant, inEffect));
-  const metrics = scene.standby ? [] : layoutMetrics(config, scene, shown, configs);
+  const metrics = scene.standby ? [] : layoutMetrics(config, scene, shown, configs, lineHeightRatio);
   // The layout as if every participant had a name, which moves nothing else, for where a name left out would be
   const namedMetrics = configs.every((layoutConfig) => layoutConfig.hasName)
     ? metrics
@@ -212,12 +240,8 @@ export const planLayoutMoves = (
         scene,
         shown,
         configs.map((layoutConfig) => ({ ...layoutConfig, hasName: true })),
+        lineHeightRatio,
       );
-
-  // Record lookups are typed as always present; a scene OBS could not report is missing
-  const sceneItem = (sceneName: string, source: string) =>
-    (state.sceneItems[sceneName] as ObsSceneItem[] | undefined)?.find((item) => item.sourceName === source);
-  const isShown = (sceneName: string, source: string) => isItemShown(state, sceneName, source);
 
   /**
    * Where standby text shows: at its rendered size, centered on the line, a gap past it: right of an upright line,
@@ -252,8 +276,19 @@ export const planLayoutMoves = (
     delay,
   });
 
-  /** Where a region goes in a layout, or the neutral point when the layout does not use it. */
-  const layoutTarget = (kind: 'border' | 'source', region: Rect | undefined): Target =>
+  /**
+   * Where the regions a participant's layout leaves out wait: a point at the middle of its main region, so they grow
+   * out of and shrink into the main content, or the neutral point when the layout shows nothing of the participant.
+   */
+  const parkingPoint = (metric: LayoutMetric): Rect => {
+    const main = MAIN_REGIONS.map((region) => metric[region]).find((region) => region !== undefined);
+    return main
+      ? { x: Math.round(main.x + main.width / 2), y: Math.round(main.y + main.height / 2), width: 1, height: 1 }
+      : neutral;
+  };
+
+  /** Where a region goes in a layout, or the participant's parking point when the layout does not use it. */
+  const layoutTarget = (kind: 'border' | 'source', region: Rect | undefined, parked: Rect): Target =>
     region
       ? {
           region,
@@ -263,7 +298,7 @@ export const planLayoutMoves = (
             height: Math.max(1, region.height - borderPadding * 2),
           },
         }
-      : { region: neutral, visible: false, size: kind === 'border' ? { width: 1, height: 1 } : undefined };
+      : { region: parked, visible: false, size: kind === 'border' ? { width: 1, height: 1 } : undefined };
 
   const layoutSteps = (
     layout: string,
@@ -271,23 +306,22 @@ export const planLayoutMoves = (
     metric: LayoutMetric,
     namedMetric: LayoutMetric,
     participant: SceneParticipant,
-  ) =>
-    Object.entries(entry.sources).flatMap(([regionName, binding]) => {
+  ) => {
+    const parked = parkingPoint(metric);
+    return Object.entries(entry.sources).flatMap(([regionName, binding]) => {
       // A name the layout leaves out waits hidden where it would be, over its host, so switching names only fades it
       const placed = metric[regionName as LayoutRegionName];
       const region = regionName === 'name' ? (placed ?? namedMetric.name) : placed;
       const settings = settingsFor(config, participant, regionName as LayoutRegionName);
       // The source may sit inside its region as padding; the border still frames the whole region
       const inner = region && settings.inset ? shrinkRegion(region, settings.inset) : region;
-      const sourceStep = step({ scene: layout, source: binding.source, kind: 'source' }, layoutTarget('source', inner));
+      const sourceStep = step(
+        { scene: layout, source: binding.source, kind: 'source' },
+        layoutTarget('source', inner, parked),
+      );
       // A text source is sized to fit its height, from how tall it renders now; text sent away keeps its last size
       if (inner && sizesFont(settings)) {
-        sourceStep.fontSize = fontSizeFor(
-          settings,
-          inner.height,
-          binding.source in state.fontSizes ? state.fontSizes[binding.source] : undefined,
-          sceneItem(layout, binding.source)?.sourceSize?.height,
-        );
+        sourceStep.fontSize = fontSizeFor(settings, inner.height, lineHeightRatio(layout, binding.source));
       }
       const steps = [sourceStep];
       if (binding.border) {
@@ -297,7 +331,7 @@ export const planLayoutMoves = (
         const border = box && growRegion(box, borderPadding);
         const borderStep = step(
           { scene: layout, source: binding.border, kind: 'border' },
-          layoutTarget('border', border),
+          layoutTarget('border', border, parked),
         );
         // A green screen camera has no border. Its border source still moves and sizes as if it framed the camera, so
         // the two stay in step, but it fades out, and fades back in with the next layout that frames the camera
@@ -307,6 +341,7 @@ export const planLayoutMoves = (
       if (!placed) for (const hidden of steps) hidden.visible = false;
       return steps;
     });
+  };
 
   const collapseSteps = (layout: string, entry: ParticipantPoolEntry, owner: string | undefined, to: StandbyLine) =>
     Object.values(entry.sources).flatMap((binding) => [

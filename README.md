@@ -298,13 +298,16 @@ it stays at `fontSizeMax` while that fits and sizes down to `fontSizeMin` when t
 line renders per pixel of font size is measured from the source itself, its rendered height at its current font size,
 so no ratio is configured; a source that renders nothing yet, such as an empty text, is sized as if a line were a
 quarter taller than its font. The item's bounds must not scale the text up, or the font size changes nothing on
-screen. When a name region has `fontSizeMin`, the layout is asked for a name at least `inset × 2 + fontSizeMin` tall
-unless the options already set `nameHeightMin`.
+screen. When a name region has `fontSizeMin`, the layout is asked for a name at least `inset × 2` plus a line at
+`fontSizeMin` tall, unless the options already set `nameHeightMin`; when it has `fontSizeMax`, for a name at most
+`inset × 2` plus a line at `fontSizeMax` tall, unless the options already set `nameHeightMax`, so the name is no
+taller than its text at the largest size needs. Lines are measured as above, and the largest such height across the
+scene's participants is asked for. The layout still keeps the name to a third of its host.
 
-A participant's `config` is a `LayoutConfig` as obs-layout-generator 2 takes it: `contentMain`, `camera`, `contentAux`,
+A participant's `config` is a `LayoutConfig` as obs-layout-generator takes it: `contentMain`, `camera`, `contentAux`,
 and `info` each take a region config such as `{ aspectRatio: '4:3' }` or `null` to turn the region off, and `hasName`
-adds the name tag. A side region attached to the main region (`isMainAttached`) or to the region above it
-(`isAboveAttached`) shares that neighbor's border, so the two border sources overlap on the same pixels there. A green
+adds the name tag. A side region attached to the main region (`isMainAttached`) or to the side region before it
+(`isPreviousAttached`) shares that neighbor's border, so the two border sources overlap on the same pixels there. A green
 screen camera (`camera: { isGreenScreen: true }`) has no border and spreads over the gaps around it; its border source
 still moves and sizes as if it framed the camera, so the two stay in step, but fades out, and fades back in with the
 next layout that frames the camera.
@@ -616,6 +619,15 @@ change the config instead.
 - **Another participant**: build a second layout scene in OBS like the first, add it to `participants`, and list it
   in the scenes that show it. The library splits participants into balanced rows.
 - Then `firebot:deploy`, which adds the preset for the new key and offers the restart.
+
+## Upgrading from 4.x
+
+- **obs-layout-generator 4** is the peer dependency: install `@eliasthompson/obs-layout-generator@^4`. In layout
+  configs, `isAboveAttached` is now `isPreviousAttached`; see that package's migration notes for its other changes.
+- **Name heights.** A name binding's `fontSizeMax` now sets the layout's `nameHeightMax` too, the inset on both sides
+  plus a line at that size, as `fontSizeMin` already set `nameHeightMin`, unless the options set it.
+- **Unused regions** wait at the middle of their participant's main region rather than the layout area's, so they
+  shrink into and grow out of the main content.
 
 ## Upgrading from 3.x
 

@@ -54,7 +54,7 @@
     "uuid": "^14.0.3"
   },
   "devDependencies": {
-    "@eliasthompson/obs-layout-generator": "^3.1.0",
+    "@eliasthompson/obs-layout-generator": "^4.0.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "^5.0.5",
@@ -68,7 +68,7 @@
     "vitest": "^5.0.5"
   },
   "peerDependencies": {
-    "@eliasthompson/obs-layout-generator": "^3.0.0"
+    "@eliasthompson/obs-layout-generator": "^4.0.0"
   },
   "exports": {
     ".": "./dist/index.js",

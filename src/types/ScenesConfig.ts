@@ -36,7 +36,10 @@ export interface RegionSettings {
    * stays at this size while it fits, and only sizes down when the region is too short for it.
    */
   fontSizeMax?: number;
-  /** How far the font may size down. With an inset, the layout's smallest name height is inset × 2 + fontSizeMin. */
+  /**
+   * How far the font may size down. On a name, the layout's smallest name height is inset × 2 plus a line at
+   * fontSizeMin, and its largest is the same at fontSizeMax.
+   */
   fontSizeMin?: number;
 }
 
