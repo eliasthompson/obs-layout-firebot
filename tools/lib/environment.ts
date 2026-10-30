@@ -23,6 +23,8 @@ export const DEFAULT_CONFIG_PATH = join('config', 'scenes.ts');
 export const DEFAULT_FIREBOT_PROFILE = 'Main';
 export const DEFAULT_FIREBOT_API_URL = 'http://localhost:7472/api/v1';
 export const DEFAULT_SCENE_COLLECTION = 'Untitled';
+export const DEFAULT_OBS_PROFILE = 'Untitled';
+export const DEFAULT_OBS_EXPORT_DIR = 'obs';
 
 /** Per-user application data: %APPDATA% on Windows, Application Support on macOS, the XDG config folder elsewhere. */
 export const appDataDir = () => {
@@ -86,6 +88,9 @@ export const firebotApiUrl = (config?: ScenesConfig) =>
 export const configVariable = (config: ScenesConfig, flag?: string) =>
   flag ?? config.firebot?.variable ?? DEFAULT_CONFIG_VARIABLE;
 
+/** A name made file-safe the way OBS names its files and folders: spaces to underscores, other punctuation dropped. */
+const obsFileSafeName = (name: string) => name.replace(/\s/gu, '_').replace(/[^\p{L}\p{N}_]/gu, '');
+
 /**
  * The file OBS keeps a scene collection in. OBS names it after the collection made file-safe (spaces to underscores,
  * other punctuation dropped, a number added when taken), so it is found by the name it holds, else by that rule.
@@ -100,11 +105,41 @@ const sceneCollectionFile = (name: string) => {
       return false;
     }
   });
-  return join(dir, named ?? `${name.replace(/\s/gu, '_').replace(/[^\p{L}\p{N}_]/gu, '')}.json`);
+  return join(dir, named ?? `${obsFileSafeName(name)}.json`);
 };
 
 /** The folder OBS keeps its scene collection files in. */
 export const obsScenesDir = () => join(appDataDir(), 'obs-studio', 'basic', 'scenes');
+
+/** The folder OBS keeps its profile folders in. */
+export const obsProfilesDir = () => join(appDataDir(), 'obs-studio', 'basic', 'profiles');
+
+/**
+ * The folder OBS keeps a profile in, named as a scene collection's file is, so it is found by the `Name` its
+ * `basic.ini` holds, else by the same rule.
+ */
+const profileFolder = (name: string) => {
+  const dir = obsProfilesDir();
+  const folders = existsSync(dir)
+    ? readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isDirectory())
+    : [];
+  const named = folders.find(({ name: folder }) => {
+    const ini = join(dir, folder, 'basic.ini');
+    return existsSync(ini) && readFileSync(ini, 'utf8').split(/\r?\n/u).includes(`Name=${name}`);
+  });
+  return join(dir, named?.name ?? obsFileSafeName(name));
+};
+
+/**
+ * OBS profile folder: `--profile`, `OBS_PROFILE_DIR`, or the folder of the profile OBS reported as active when it was
+ * asked, else of the config's profile (default "Untitled").
+ */
+export const obsProfileDir = (config?: ScenesConfig, flag?: string, activeProfile?: string) =>
+  flag ?? process.env.OBS_PROFILE_DIR ?? profileFolder(activeProfile ?? config?.obs?.profile ?? DEFAULT_OBS_PROFILE);
+
+/** Where `obs:export` writes: `--to`, else the config's `obs.exportDir`, else "obs", relative to the working folder. */
+export const obsExportDir = (config?: ScenesConfig, flag?: string) =>
+  resolve(flag ?? config?.obs?.exportDir ?? DEFAULT_OBS_EXPORT_DIR);
 
 /**
  * OBS scene collection file: `--collection`, `OBS_SCENE_COLLECTION`, or the file of the collection OBS reported as

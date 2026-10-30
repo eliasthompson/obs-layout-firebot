@@ -7,6 +7,7 @@ import { firebotPrune } from './commands/firebotPrune';
 import { firebotRestart } from './commands/firebotRestart';
 import { obsCapture } from './commands/obsCapture';
 import { obsDeploy } from './commands/obsDeploy';
+import { obsExport } from './commands/obsExport';
 import { obsPrune } from './commands/obsPrune';
 import { obsRestart } from './commands/obsRestart';
 import { obsVerify } from './commands/obsVerify';
@@ -24,6 +25,10 @@ const COMMANDS: Record<string, Command> = {
   'obs:restart': { run: obsRestart, summary: 'restart OBS, never forcibly' },
   'obs:verify': { run: obsVerify, summary: 'apply a scene key from this machine and compare the result with the plan' },
   'obs:capture': { run: obsCapture, summary: 'sample screenshots during a transition' },
+  'obs:export': {
+    run: obsExport,
+    summary: "copy OBS's scene collection and profile into the project, with every secret blanked",
+  },
   'obs:prune': {
     run: obsPrune,
     summary: "delete obs:deploy's old scene collection backups for good, keeping the newest (asks first)",

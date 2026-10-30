@@ -1,5 +1,5 @@
 // What the tools ask OBS beyond the layout itself: that it is running and reachable, whether it is live, and which
-// scene collection it has loaded.
+// scene collection and profile it has loaded.
 import type { ObsClient } from '@/lib/connectObs';
 import type { ObsConnection } from '@/types/ScenesConfig';
 
@@ -42,3 +42,7 @@ export const readObsLiveStatus = async (client: ObsClient) => {
 /** The name of the scene collection OBS has loaded. */
 export const readActiveSceneCollection = async (client: ObsClient) =>
   ((await client.call('GetSceneCollectionList')) as { currentSceneCollectionName: string }).currentSceneCollectionName;
+
+/** The name of the profile OBS has loaded. */
+export const readActiveProfile = async (client: ObsClient) =>
+  ((await client.call('GetProfileList')) as { currentProfileName: string }).currentProfileName;

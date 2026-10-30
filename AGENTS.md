@@ -14,7 +14,7 @@ Firebot custom script, plus the `obs-layout-firebot` CLI to install and operate 
   obs-layout-generator bundled in), `dist/index.js` and `dist/index.d.ts` (the library and config types), `dist/settings.js` and its types (the
   portable `settings` subpath), and `dist/cli.js` (the CLI). The `exports` field is generated from these entries.
 - `npm run dev`: tsdown in watch mode, so a project that links this checkout runs the current source. The CLI's
-  commands (`obs:deploy`, `obs:restart`, `obs:verify`, `obs:capture`, `obs:prune`, `firebot:deploy`,
+  commands (`obs:deploy`, `obs:restart`, `obs:verify`, `obs:capture`, `obs:export`, `obs:prune`, `firebot:deploy`,
   `firebot:restart`, `firebot:prune`) run there,
   against that project's config. Commands are grouped by the program they act on, and each deploy is the one command
   for its side; the steps it is made of live in `tools/lib`. See README.md

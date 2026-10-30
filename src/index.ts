@@ -8,6 +8,7 @@ export * from '@/lib/adjustInsetRatios';
 export * from '@/lib/aitumProgram';
 export * from '@/lib/assertConfig';
 export * from '@/lib/backups';
+export * from '@/lib/blankSecrets';
 export * from '@/lib/buildMoveRequests';
 export * from '@/lib/connectObs';
 export * from '@/lib/containsValues';
