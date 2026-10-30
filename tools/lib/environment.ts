@@ -17,6 +17,7 @@ import { assertConfig } from '@/lib/assertConfig';
 import { backupName } from '@/lib/backups';
 import { SCRIPT_FILE_NAME } from '@/lib/createPresetEffectList';
 import { readFirebotIntegrations } from '@/lib/readFirebotIntegrations';
+import { readObsLastUsed } from '@/lib/readObsLastUsed';
 import { resolveObsConnection } from '@/lib/resolveObsConnection';
 
 export const DEFAULT_CONFIG_PATH = join('config', 'scenes.ts');
@@ -131,23 +132,48 @@ const profileFolder = (name: string) => {
 };
 
 /**
- * OBS profile folder: `--profile`, `OBS_PROFILE_DIR`, or the folder of the profile OBS reported as active when it was
- * asked, else of the config's profile (default "Untitled").
+ * The profile and scene collection OBS last had loaded, and loads on its next start, for when OBS is not running to
+ * say: from `user.ini` (OBS 31 and later), else `global.ini`. Each is left out unless its folder or file exists.
+ */
+const obsLastUsed = () => {
+  const studioDir = join(appDataDir(), 'obs-studio');
+  const [user, global] = ['user.ini', 'global.ini'].map((file) => {
+    const path = join(studioDir, file);
+    return existsSync(path) ? readObsLastUsed(readFileSync(path, 'utf8')) : {};
+  });
+  const profileDir = user.profileDir ?? global.profileDir;
+  const sceneCollectionFile = user.sceneCollectionFile ?? global.sceneCollectionFile;
+  const profilePath = profileDir === undefined ? undefined : join(obsProfilesDir(), profileDir);
+  const collectionPath = sceneCollectionFile === undefined ? undefined : join(obsScenesDir(), sceneCollectionFile);
+  return {
+    profilePath: profilePath !== undefined && existsSync(profilePath) ? profilePath : undefined,
+    collectionPath: collectionPath !== undefined && existsSync(collectionPath) ? collectionPath : undefined,
+  };
+};
+
+/**
+ * OBS profile folder: `--profile`, `OBS_PROFILE_DIR`, the folder of the profile OBS reported as active when it was
+ * asked, the one OBS last had loaded when it could not be asked, else the config's profile (default "Untitled").
  */
 export const obsProfileDir = (config?: ScenesConfig, flag?: string, activeProfile?: string) =>
-  flag ?? process.env.OBS_PROFILE_DIR ?? profileFolder(activeProfile ?? config?.obs?.profile ?? DEFAULT_OBS_PROFILE);
+  flag ??
+  process.env.OBS_PROFILE_DIR ??
+  (activeProfile === undefined ? obsLastUsed().profilePath : undefined) ??
+  profileFolder(activeProfile ?? config?.obs?.profile ?? DEFAULT_OBS_PROFILE);
 
 /** Where `obs:export` writes: `--to`, else the config's `obs.exportDir`, else "obs", relative to the working folder. */
 export const obsExportDir = (config?: ScenesConfig, flag?: string) =>
   resolve(flag ?? config?.obs?.exportDir ?? DEFAULT_OBS_EXPORT_DIR);
 
 /**
- * OBS scene collection file: `--collection`, `OBS_SCENE_COLLECTION`, or the file of the collection OBS reported as
- * active when it was asked, else of the config's collection (default "Untitled").
+ * OBS scene collection file: `--collection`, `OBS_SCENE_COLLECTION`, the file of the collection OBS reported as active
+ * when it was asked, the one OBS last had loaded when it could not be asked, else the config's collection (default
+ * "Untitled").
  */
 export const obsSceneCollectionPath = (config?: ScenesConfig, flag?: string, activeCollection?: string) =>
   flag ??
   process.env.OBS_SCENE_COLLECTION ??
+  (activeCollection === undefined ? obsLastUsed().collectionPath : undefined) ??
   sceneCollectionFile(activeCollection ?? config?.obs?.sceneCollection ?? DEFAULT_SCENE_COLLECTION);
 
 /** Ask a yes/no question on the terminal. `yes` answers it beforehand; without a terminal the answer is no. */

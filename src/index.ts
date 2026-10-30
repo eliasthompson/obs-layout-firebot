@@ -31,6 +31,7 @@ export * from '@/lib/planItemToggles';
 export * from '@/lib/planLayoutMoves';
 export * from '@/lib/readFirebotIntegrations';
 export * from '@/lib/readObsCanvases';
+export * from '@/lib/readObsLastUsed';
 export * from '@/lib/readObsState';
 export * from '@/lib/resolveBorderColor';
 export * from '@/lib/resolveCanvasConfig';

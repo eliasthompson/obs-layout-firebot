@@ -197,9 +197,15 @@ export interface ObsConnection {
 }
 
 export interface ObsSettings extends Partial<ObsConnection> {
-  /** Tools only: the scene collection `obs:deploy` edits when OBS cannot say which one is active. Default "Untitled". */
+  /**
+   * Tools only: the scene collection `obs:deploy` and `obs:export` use when neither OBS nor its settings say which one
+   * it has loaded. Default "Untitled".
+   */
   sceneCollection?: string;
-  /** Tools only: the profile `obs:export` exports when OBS cannot say which one is active. Default "Untitled". */
+  /**
+   * Tools only: the profile `obs:export` exports when neither OBS nor its settings say which one it has loaded. Default
+   * "Untitled".
+   */
   profile?: string;
   /**
    * Tools only: the folder `obs:export` writes the scene collection and profile to, relative to where the tools run.

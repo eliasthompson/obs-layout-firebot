@@ -509,12 +509,16 @@ else the default.
 | `firebot.apiUrl`      | `FIREBOT_API_URL`        |                 | `http://localhost:7472/api/v1`                           |
 | `firebot.variable`    |                          | `--variable`    | `layoutScenes`                                           |
 | `firebot.executable`  |                          |                 | The standard install (Windows, macOS); required on Linux |
-| `obs.sceneCollection` | `OBS_SCENE_COLLECTION`   | `--collection`  | The collection OBS reports as active, else `Untitled`    |
-| `obs.profile`         | `OBS_PROFILE_DIR`        | `--profile`     | The profile OBS reports as active, else `Untitled`       |
+| `obs.sceneCollection` | `OBS_SCENE_COLLECTION`   | `--collection`  | The collection OBS reports as active, else `Untitled`¹   |
+| `obs.profile`         | `OBS_PROFILE_DIR`        | `--profile`     | The profile OBS reports as active, else `Untitled`¹      |
 | `obs.exportDir`       |                          | `--to`          | `obs`, in the folder you run the tools from              |
 | `obs.executable`      |                          |                 | The standard install (Windows, macOS, Linux package)     |
 | `obs.url`             | `OBS_WEBSOCKET_URL`      |                 | Firebot's OBS integration, else `ws://localhost:4455`    |
 | `obs.password`        | `OBS_WEBSOCKET_PASSWORD` |                 | Firebot's OBS integration, else none                     |
+
+¹ The scene collection and OBS profile go by what OBS says first: the ones it has loaded when it is running, else the
+ones it last had loaded and opens with next, from its `user.ini` (or `global.ini` before OBS 31). Only when neither
+says do the config's names apply, so they matter only on a machine where OBS has never run.
 
 The config takes profiles and a scene collection by name; the environment variables and options take the full path
 of the profile folder and the collection file. The data folders are `%APPDATA%` on Windows,
@@ -533,7 +537,7 @@ the config takes `--config <path>` (default `config/scenes.ts`); every command t
 | `obs:restart`     | Restarts OBS, never forcibly, after checking that it is not streaming or recording.                                                                                                                                                             |
 | `obs:verify`      | `obs:verify "<scene key>"`: applies a scene from this machine and compares every item on every canvas with the plan; exits 1 on a mismatch. `--modifiers Keyed,Timer` applies it as the script would with those switched on.                    |
 | `obs:capture`     | `obs:capture "<scene key>" --save frames/`: screenshots of a canvas's container during a transition, or white-pixel counts without it. `--canvas portrait` picks the canvas, the first that shows the scene by default. `--modifiers` as above. |
-| `obs:export`      | Copies OBS's scene collection and profile into the project, with every secret blanked, so the setup can be committed; see [Exporting the OBS setup](#exporting-the-obs-setup). `--to obs`, `--collection`, `--profile`.                         |
+| `obs:export`      | Copies OBS's scene collection and profile into the project, with every secret blanked, so the setup can be committed; see [Exporting the OBS setup](#exporting-the-obs-setup). `--to obs`, `--collection`, `--profile`, `--no-wait`.            |
 | `obs:prune`       | **Deletes for good** the old backups `obs:deploy` made of the scene collections, keeping the newest of each; see [Pruning backups](#pruning-backups). `--keep 3`, `--collection`.                                                               |
 | `firebot:deploy`  | Checks, stores, installs the script, and asks to restart for new presets or a new script; see below. `--skip-obs`.                                                                                                                              |
 | `firebot:restart` | Restarts Firebot, never forcibly, around installing the presets and turning on the two settings above.                                                                                                                                          |
@@ -566,7 +570,9 @@ obs/
   profiles/<profile>/basic.ini, service.json, streamEncoder.json, …
 ```
 
-With OBS running, it exports the collection and profile OBS has loaded; otherwise the config's. Only the profile's
+It exports the collection and profile OBS has loaded, asking OBS over the websocket. When OBS is not running, as
+after a deploy that restarted it and left starting it to you, it waits for OBS to start; without a terminal to wait
+on, or with `--no-wait`, it exports the ones OBS last had loaded instead. Only the profile's
 `.ini` and `.json` files are copied, and exported profile files the profile no longer has are removed. Secret values
 are blanked on the way: the stream key in `service.json`, the account tokens in `basic.ini`, and any other setting
 named like a key, token, password, or secret. The command lists each by name, never its value. After a restore, paste
