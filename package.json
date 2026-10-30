@@ -1,6 +1,6 @@
 {
   "name": "@eliasthompson/obs-layout-firebot",
-  "version": "4.3.0",
+  "version": "5.0.0",
   "description": "Firebot custom script and CLI that lay out OBS scene items with obs-layout-generator and the Move Transition plugin",
   "keywords": [
     "firebot",
