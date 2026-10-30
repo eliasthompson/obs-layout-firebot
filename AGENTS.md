@@ -88,12 +88,10 @@ Before finishing a change, run typecheck, lint, format check, test coverage, and
 ## Commits
 
 - [Conventional Commits](https://www.conventionalcommits.org/): `feat`, `fix`, `docs`, `refactor`, `build`, `ci`, or
-  `chore`. A breaking change adds `!` after the type and a `BREAKING CHANGE:` footer saying what to change.
-- The subject is one lowercase sentence in the imperative, with no period, saying what changes and, after a comma,
-  why: `fix: let obs:prune take --config like every other command, so project scripts can pass it`.
-- Add a body only when the subject cannot carry the change: a paragraph, or a list for several changes, wrapped at 120
-  columns.
-- No trailers, such as `Co-Authored-By`, on any commit.
+  `chore`. A breaking change adds `!` after the type; what to change goes in README.md, not the commit.
+- A commit message is one line: one lowercase sentence in the imperative, with no period, saying what changes and,
+  after a comma, why: `fix: let obs:prune take --config like every other command, so project scripts can pass it`.
+- No body, footer, or trailers, such as `Co-Authored-By`, on any commit.
 - A release is a commit of its own, `chore: release vX.Y.Z`, with no body. Bump with
   `npm version <major|minor|patch> --no-git-tag-version` (major for a breaking change since the last release, minor for
   a feature, patch otherwise), and tag the commit with an annotated `vX.Y.Z` tag of the same message. Pushing the tag
